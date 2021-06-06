@@ -1,3 +1,4 @@
+use cached::proc_macro::cached;
 use crate::configuration::{self, Route};
 use std::fs;
 use tide::{http::mime, Request, Response, Server};
@@ -28,12 +29,19 @@ async fn endpoint(req: Request<()>) -> tide::Result<tide::Response> {
     let routes = configuration::get_routes();
     let route: &Route = &configuration::get_route(&routes, &req.url().as_str()).unwrap();
 
-    let data = fs::read_to_string(&route.resource).expect("Unable to read data");
+    let data = get_data(route.resource.to_string());
     let response = Response::builder(200)
         .content_type(get_mime(&data))
         .body(data)
         .build();
     Ok(response)
+}
+
+
+#[cached]
+fn get_data(resource: String) -> String {
+    println!("Load resource: {}", resource);
+    fs::read_to_string(resource).unwrap_or_else(|_error| "File not found".to_string())
 }
 
 fn get_mime(path: &str) -> mime::Mime {
