@@ -21,7 +21,24 @@ pub fn get_routes() -> Vec<Route> {
 }
 
 pub fn get_route<'a>(routes: &'a Vec<Route>, path: &'a str) -> Option<&'a Route> {
-    routes.iter().filter(|i| path.ends_with(&i.path)).last()
+    if path.to_lowercase().contains(&"$$$".to_string()) {
+        let (start, end) = get_not_dynamic_part_of_url(&path);
+        routes
+            .iter()
+            .filter(|i| i.path.starts_with(start))
+            .filter(|i| i.path.ends_with(end))
+            .last()
+    } else {
+        routes.iter().filter(|i| path.ends_with(&i.path)).last()
+    }
+}
+
+fn get_not_dynamic_part_of_url(path: &str) -> (&str, &str) {
+    let wildcard = "$$$";
+    (
+        path.trim_end_matches(wildcard),
+        path.trim_start_matches("$$$"),
+    )
 }
 
 #[cached]

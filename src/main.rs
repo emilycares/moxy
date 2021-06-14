@@ -1,5 +1,6 @@
 pub mod configuration;
 pub mod router;
+pub mod data_loader;
 
 #[async_std::main]
 async fn main() -> tide::Result<()> {

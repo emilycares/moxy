@@ -1,6 +1,4 @@
-use cached::proc_macro::cached;
-use crate::configuration::{self, Route};
-use std::fs;
+use crate::{configuration::{self, Route}, data_loader};
 use tide::{http::mime, Request, Response, Server};
 
 pub fn setup(routes: Vec<Route>, server: &mut Server<()>) {
@@ -29,7 +27,7 @@ async fn endpoint(req: Request<()>) -> tide::Result<tide::Response> {
     let routes = configuration::get_routes();
     let route: &Route = &configuration::get_route(&routes, &req.url().as_str()).unwrap();
 
-    let data = get_data(route.resource.to_string());
+    let data = data_loader::load(&route, &req);
     let response = Response::builder(200)
         .content_type(get_mime(&data))
         .body(data)
@@ -38,11 +36,6 @@ async fn endpoint(req: Request<()>) -> tide::Result<tide::Response> {
 }
 
 
-#[cached]
-fn get_data(resource: String) -> String {
-    println!("Load resource: {}", resource);
-    fs::read_to_string(resource).unwrap_or_else(|_error| "File not found".to_string())
-}
 
 fn get_mime(path: &str) -> mime::Mime {
     if path.ends_with("json") {
