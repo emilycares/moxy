@@ -4,7 +4,7 @@ use std::fs;
 use std::fs::File;
 use std::io::ErrorKind;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Route {
     pub method: String,
     pub path: String,
@@ -21,25 +21,50 @@ pub fn get_routes() -> Vec<Route> {
 }
 
 pub fn get_route<'a>(routes: &'a Vec<Route>, path: &'a str) -> Option<&'a Route> {
-    if path.to_lowercase().contains(&"$$$".to_string()) {
-        let (start, end) = get_not_dynamic_part_of_url(&path);
-        routes
-            .iter()
-            .filter(|i| i.path.starts_with(start))
-            .filter(|i| i.path.ends_with(end))
-            .last()
+    let clear = routes.iter().filter(|i| path.ends_with(&i.path)).last();
+
+    if clear.is_some() {
+        clear
     } else {
-        routes.iter().filter(|i| path.ends_with(&i.path)).last()
+        let dynamic_routes = routes
+            .iter()
+            .filter(|i| i.path.contains("$$$"))
+            .filter(|i| {
+                let index = i.path.find("$$$").unwrap();
+                let port_end = path.find("8080").unwrap() + 4;
+                let match_before = &i.path[0..index];
+
+                let checkable_path = &path[port_end..path.len()];
+
+                checkable_path.starts_with(&match_before)
+                // TODO: check end
+                //let start = &index + 3;
+                //let match_after = &i.path[start..i.path.len() - 1];
+                //println!("{}", match_after);
+
+                //path.ends_with(match_after)
+            });
+
+        dynamic_routes.last()
     }
+
+    //if path.to_lowercase().contains(&"$$$".to_string()) {
+    //let (start, end) = get_start_and_end(&path);
+    //routes
+    //.iter()
+    //.filter(|i| i.path.starts_with(start))
+    //.filter(|i| i.path.ends_with(end))
+    //.last()
+    //}
 }
 
-fn get_not_dynamic_part_of_url(path: &str) -> (&str, &str) {
-    let wildcard = "$$$";
-    (
-        path.trim_end_matches(wildcard),
-        path.trim_start_matches("$$$"),
-    )
-}
+//fn get_start_and_end(path: &str) -> (&str, &str) {
+//let wildcard = "$$$";
+//(
+//path.trim_end_matches(wildcard),
+//path.trim_start_matches(wildcard),
+//)
+//}
 
 #[cached]
 fn load_configuration(loaction: String) -> Configuration {
