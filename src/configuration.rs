@@ -21,50 +21,33 @@ pub fn get_routes() -> Vec<Route> {
 }
 
 pub fn get_route<'a>(routes: &'a Vec<Route>, path: &'a str) -> Option<&'a Route> {
-    let clear = routes.iter().filter(|i| path.ends_with(&i.path)).last();
+    for i in routes.iter() {
+        let idx = &i.path.find("$$$");
 
-    if clear.is_some() {
-        clear
-    } else {
-        let dynamic_routes = routes
-            .iter()
-            .filter(|i| i.path.contains("$$$"))
-            .filter(|i| {
-                let index = i.path.find("$$$").unwrap();
-                let port_end = path.find("8080").unwrap() + 4;
-                let match_before = &i.path[0..index];
+        if idx.is_some() {
+            let index = &idx.unwrap();
+            let port_end = path.find("8080").unwrap() + 4;
+            let match_before = &i.path[0..*index];
 
-                let checkable_path = &path[port_end..path.len()];
+            let checkable_path = &path[port_end..path.len()];
 
-                checkable_path.starts_with(&match_before)
-                // TODO: check end
-                //let start = &index + 3;
-                //let match_after = &i.path[start..i.path.len() - 1];
-                //println!("{}", match_after);
+            if checkable_path.starts_with(&match_before) {
+                if index + 3 != i.path.len() {
+                    let end = &i.path[index + 3..i.path.len()];
 
-                //path.ends_with(match_after)
-            });
-
-        dynamic_routes.last()
+                    if path.ends_with(end) {
+                        return Some(i);
+                    }
+                }
+            }
+        }
+        if path.ends_with(&i.path) {
+            return Some(i);
+        }
     }
 
-    //if path.to_lowercase().contains(&"$$$".to_string()) {
-    //let (start, end) = get_start_and_end(&path);
-    //routes
-    //.iter()
-    //.filter(|i| i.path.starts_with(start))
-    //.filter(|i| i.path.ends_with(end))
-    //.last()
-    //}
+    None
 }
-
-//fn get_start_and_end(path: &str) -> (&str, &str) {
-//let wildcard = "$$$";
-//(
-//path.trim_end_matches(wildcard),
-//path.trim_start_matches(wildcard),
-//)
-//}
 
 #[cached]
 fn load_configuration(loaction: String) -> Configuration {
@@ -84,3 +67,7 @@ fn load_configuration(loaction: String) -> Configuration {
         Configuration { routes: vec![] }
     })
 }
+
+#[cfg(test)]
+#[path = "./configuration_test.rs"]
+mod tests;
