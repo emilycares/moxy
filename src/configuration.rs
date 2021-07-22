@@ -1,4 +1,5 @@
 use cached::proc_macro::cached;
+use hyper::Uri;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::fs::File;
@@ -20,33 +21,46 @@ pub fn get_routes() -> Vec<Route> {
     load_configuration("./mockit.json".to_string()).routes
 }
 
-pub fn get_route<'a>(routes: &'a Vec<Route>, path: &'a str) -> Option<&'a Route> {
+pub fn get_route<'a>(
+    routes: &'a Vec<Route>,
+    uri: &'a Uri,
+    method: &'a str,
+) -> (Option<&'a Route>, Option<&'a str>) {
     for i in routes.iter() {
-        let idx = &i.path.find("$$$");
+        println!("{}, {}", i.method, &method);
+        if i.method.eq(&method) {
+            let idx = &i.path.find("$$$");
+            let path = &uri.path();
 
-        if idx.is_some() {
-            let index = &idx.unwrap();
-            let port_end = path.find("8080").unwrap() + 4;
-            let match_before = &i.path[0..*index];
+            if idx.is_some() {
+                let index = &idx.unwrap();
+                let match_before = &i.path[0..*index];
+                println!("match_before: {}", match_before);
+                println!("checkable_path: {}", path);
 
-            let checkable_path = &path[port_end..path.len()];
+                if path.starts_with(&match_before) {
+                    //println!("start maches");
+                    if index + 3 != i.path.len() {
+                        let match_end = &i.path[index + 3..i.path.len()];
 
-            if checkable_path.starts_with(&match_before) {
-                if index + 3 != i.path.len() {
-                    let end = &i.path[index + 3..i.path.len()];
-
-                    if path.ends_with(end) {
-                        return Some(i);
+                        println!("match_end: {}", match_end);
+                        if path.ends_with(match_end) {
+                            let sd = match_end.len();
+                            return (Some(i), Some(&path[i.path.len() - 3 - sd..path.len() - sd]));
+                        }
+                    } else {
+                        println!("No more after dyn, {}", &path);
+                        return (Some(i), Some(&path[i.path.len() - 3..path.len()]));
                     }
                 }
             }
-        }
-        if path.ends_with(&i.path) {
-            return Some(i);
+            if path.ends_with(&i.path) {
+                return (Some(i), None);
+            }
         }
     }
 
-    None
+    (None, None)
 }
 
 #[cached]

@@ -1,13 +1,24 @@
-pub mod configuration;
-pub mod router;
-pub mod data_loader;
+use hyper::{
+    service::{make_service_fn, service_fn},
+    Server,
+};
+use std::{convert::Infallible, net::SocketAddr};
 
-#[async_std::main]
-async fn main() -> tide::Result<()> {
-    let host = "127.0.0.1:8080";
-    println!("Started at: {}", host);
-    let mut app = tide::new();
-    router::setup(configuration::get_routes(), &mut app); 
-    app.listen(host).await?;
-    Ok(())
+pub mod configuration;
+pub mod data_loader;
+pub mod router;
+
+#[tokio::main]
+async fn main() {
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+
+    let make_service =
+        make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(router::endpoint)) });
+
+    let server = Server::bind(&addr).serve(make_service);
+
+    // Run this server for... forever!
+    if let Err(e) = server.await {
+        eprintln!("server error: {}", e);
+    }
 }
