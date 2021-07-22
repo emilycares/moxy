@@ -6,13 +6,10 @@ pub fn load(route: &Route, parameter: Option<&str>) -> String {
     if route.resource.starts_with("htt") {
         "unimplemented".to_string()
     } else {
-        println!("{:?}", parameter);
         if parameter.is_some() {
-            println!("load dyn");
             let dynamic_resource = route.resource.replace("$$$", parameter.unwrap());
             file(dynamic_resource)
         } else {
-            println!("load static");
             file(route.resource.to_string())
         }
     }

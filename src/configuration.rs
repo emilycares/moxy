@@ -27,7 +27,6 @@ pub fn get_route<'a>(
     method: &'a str,
 ) -> (Option<&'a Route>, Option<&'a str>) {
     for i in routes.iter() {
-        println!("{}, {}", i.method, &method);
         if i.method.eq(&method) {
             let idx = &i.path.find("$$$");
             let path = &uri.path();
@@ -35,21 +34,16 @@ pub fn get_route<'a>(
             if idx.is_some() {
                 let index = &idx.unwrap();
                 let match_before = &i.path[0..*index];
-                println!("match_before: {}", match_before);
-                println!("checkable_path: {}", path);
 
                 if path.starts_with(&match_before) {
-                    //println!("start maches");
                     if index + 3 != i.path.len() {
                         let match_end = &i.path[index + 3..i.path.len()];
 
-                        println!("match_end: {}", match_end);
                         if path.ends_with(match_end) {
                             let sd = match_end.len();
                             return (Some(i), Some(&path[i.path.len() - 3 - sd..path.len() - sd]));
                         }
                     } else {
-                        println!("No more after dyn, {}", &path);
                         return (Some(i), Some(&path[i.path.len() - 3..path.len()]));
                     }
                 }
