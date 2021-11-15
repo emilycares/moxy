@@ -4,6 +4,7 @@ use hyper::{
 };
 use std::{convert::Infallible, net::SocketAddr};
 
+pub mod builder;
 pub mod configuration;
 pub mod data_loader;
 pub mod router;
@@ -15,6 +16,7 @@ async fn main() {
     let make_service =
         make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(router::endpoint)) });
 
+    println!("Starting http server");
     let server = Server::bind(&addr).serve(make_service);
 
     // Run this server for... forever!
