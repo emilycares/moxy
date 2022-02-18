@@ -10,7 +10,7 @@ pub mod data_loader;
 pub mod router;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
 
     let make_service =
@@ -23,4 +23,5 @@ async fn main() {
     if let Err(e) = server.await {
         eprintln!("server error: {}", e);
     }
+    Ok(())
 }
