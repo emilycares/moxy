@@ -2,7 +2,7 @@ use std::convert::Infallible;
 
 use hyper::{Body, Request, Response};
 
-use crate::{configuration, data_loader};
+use crate::{builder::fetch_request, configuration, data_loader};
 
 pub(crate) async fn endpoint(req: Request<Body>) -> Result<Response<Body>, Infallible> {
     println!("{}", req.uri());
@@ -18,13 +18,17 @@ pub(crate) async fn endpoint(req: Request<Body>) -> Result<Response<Body>, Infal
 
         Ok(response)
     } else {
-        let response = Response::builder()
-            .status(404)
-            .body(Body::from(format!(
-                "Could not load resource {}",
-                &req.uri()
-            )))
-            .unwrap();
-        Ok(response)
+        println!("{:?}", &req);
+
+        let body = fetch_request(req, String::from("https://smashmc.eu")).await;
+
+        match body {
+            Some(body) => {
+                let response = Response::builder().status(200).body(body).unwrap();
+
+                Ok(response)
+            }
+            None => todo!(),
+        }
     }
 }

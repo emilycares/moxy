@@ -1,1 +1,4 @@
-/target
+target/
+core/target
+gui/target
+gui/assets/SauceCodeProMediumNF.ttf
