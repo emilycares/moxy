@@ -15,10 +15,20 @@ pub struct Route {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Configuration {
     routes: Vec<Route>,
+    host: String,
 }
 
-pub fn get_routes() -> Vec<Route> {
-    load_configuration("./mockit.json".to_string()).routes
+impl Configuration {
+    pub fn get_routes(&self) -> Vec<Route> {
+        self.clone().routes
+    }
+    pub fn get_host(&self) -> String {
+        self.clone().host
+    }
+}
+
+pub fn get_configuration() -> Configuration {
+    load_configuration("./mockit.json".to_string())
 }
 
 pub fn get_route<'a>(
@@ -72,7 +82,10 @@ fn load_configuration(loaction: String) -> Configuration {
 
     serde_json::from_str(&data).unwrap_or_else(|error| {
         println!("Could not load configuration file: {:?}", error);
-        Configuration { routes: vec![] }
+        Configuration {
+            routes: vec![],
+            host: String::from("http://localhost"),
+        }
     })
 }
 

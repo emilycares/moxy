@@ -1,57 +1,74 @@
 use std::collections::HashMap;
 
-use hyper::body::HttpBody;
-use hyper::header::{HeaderName, HeaderValue};
-use hyper::{Body, Client, Method, Request, Response, Uri};
-use hyper_tls::HttpsConnector;
+use hyper::{HeaderMap, Uri, Method, Body};
+use reqwest::Error;
 
-//pub async fn build(request: Request<Body>) -> Option<String> {
-//let response = fetch_request(request).await;
 
-//match response {
-//Some(response) => {
-//let data = get_body(response).await;
-//}
-//None => todo!(),
-//}
-
-//None
-//}
-
-pub async fn fetch_request(request: Request<Body>, from: String) -> Option<Body> {
-    let headers: HashMap<String, String> = HashMap::new();
-
-    // fetch data
-    let response = fetch_url(
-        request.method().to_owned(),
-        &get_url(&request.uri(), from),
-        get_body(request.into_body()).await,
-        headers,
-        )
-        .await?;
-
-    let body = response.into_body();
-
-    Some(body)
+#[derive(Debug, Clone)]
+pub struct ResourceData {
+    headers: HashMap<String, String>,
+    code: u16,
+    pub payload: Option<String>,
 }
 
-const MAX_ALLOWED_RESPONSE_SIZE: u64 = 1024;
-fn is_body_to_lage(response: &Option<Response<Body>>) -> bool {
 
-    match response {
-        Some(response) => {
-            let response_content_length = match &response.body().size_hint().upper() {
-                Some(v) => v,
-                None => &MAX_ALLOWED_RESPONSE_SIZE. + 1, // Just to protect ourselves from a malicious response
-            };
+pub fn get_url(uri: &Uri, host: String) -> String {
+    host + &uri.to_string()
+}
 
-            response_content_length > &MAX_ALLOWED_RESPONSE_SIZE
-        },
-        None => false,
+fn header_map_to_hash_map(header: &HeaderMap) -> HashMap<String, String> {
+    let keys = header.keys();
+    let mut out: HashMap<String, String> = HashMap::new();
+
+    for key in keys {
+        if let Some(value) = header.get(key) {
+            if let Ok(value) = value.to_owned().to_str() {
+                out.insert(key.to_string(), value.to_string());
+            }
+        }
+    }
+
+    out
+}
+
+pub async fn fetch_request(
+    method: Method,
+    url: String,
+    body: Option<String>,
+    header: HashMap<String, String>,
+) -> Option<ResourceData> {
+    let client = reqwest::Client::new();
+    let mut req = client.request(method, url);
+
+    //if let Ok(header) = header.try_from() {
+    //req.headers(header);
+    //}
+
+    if let Some(body) = body {
+        req = req.body(body);
+    }
+
+    let response = req.send().await;
+
+    if let Ok(response) = response {
+        return Some(ResourceData {
+            headers: header_map_to_hash_map(&response.headers()),
+            code: response.status().as_u16(),
+            payload: get_payload(&response.text().await),
+        });
+    }
+
+    None
+}
+
+fn get_payload(text: &Result<String, Error>) -> Option<String> {
+    match text {
+        Ok(p) => Some(p.to_string()),
+        Err(_) => None,
     }
 }
 
-async fn get_body(body: Body) -> Option<String> {
+pub async fn get_body(body: Body) -> Option<String> {
     // size check
 
     // return result
@@ -70,76 +87,6 @@ async fn get_body(body: Body) -> Option<String> {
     }
 }
 
-fn get_url(uri: &Uri, host: String) -> String {
-    host + &uri.to_string()
-}
-
-pub async fn fetch_url(
-    method: Method,
-    url: &str,
-    body: Option<String>,
-    header: HashMap<String, String>,
-    ) -> Option<Response<Body>> {
-    let https = HttpsConnector::new();
-    let client = Client::builder().build::<_, hyper::Body>(https);
-
-    println!(
-        "fetching: url: {}, header: {:?}, body: {:?}",
-        &url, &header, &body
-        );
-
-    let response = match get_request(method, url, body, header) {
-        Some(request) => match client.request(request).await {
-            Ok(response) => Some(response),
-            Err(err) => {
-                println!("Server did not respond as expected {:?}", err);
-                None
-            }
-        },
-        None => {
-            println!("Unable to perform request");
-            None
-        }
-    }
-
-    match is_body_to_lage(&response) {
-        true => None,
-        false => response,
-    }
-}
-
-fn get_request(
-    method: Method,
-    url: &str,
-    body: Option<String>,
-    header: HashMap<String, String>,
-    ) -> Option<Request<Body>> {
-    let mut req = Request::builder().uri(url).method(&method); // create request
-    if let Some(request_header) = req.headers_mut() {
-        // get mutable header
-        for (name, value) in header {
-            request_header.insert(
-                HeaderName::from_lowercase(name.as_bytes()).unwrap(),
-                HeaderValue::from_str(&value).unwrap_or(HeaderValue::from_static("")),
-                );
-        }
-    }
-
-    let body = match body {
-        Some(data) => Body::from(data),
-        None => Body::empty(),
-    };
-
-    let request = req.body(body);
-
-    match request {
-        Ok(r) => Some(r),
-        Err(err) => {
-            println!("Unable to build request {:?}", err);
-            None
-        }
-    }
-}
 
 #[cfg(test)]
 #[path = "./builder_test.rs"]

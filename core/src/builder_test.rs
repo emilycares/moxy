@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use hyper::{Method, Body};
 
-use super::{fetch_url, get_body};
+use super::{get_body, fetch_request};
 
 #[tokio::test]
 async fn requrest_no_body() {
-    let reponse = fetch_url(
+    let reponse = fetch_request(
         Method::GET,
-        "http://google.com",
+        "http://google.com".to_string(),
         None,
         HashMap::new(),
         )
