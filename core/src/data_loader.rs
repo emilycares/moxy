@@ -17,6 +17,6 @@ pub fn load(route: &Route, parameter: Option<&str>) -> String {
 
 #[cached]
 fn file(resource: String) -> String {
-    println!("Load File: {}", resource);
+    log::debug!("Load File: {}", resource);
     fs::read_to_string(&resource).unwrap_or_else(|_error| format!("File: {} not found", resource))
 }

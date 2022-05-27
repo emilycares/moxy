@@ -1,19 +1,40 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
-use hyper::{HeaderMap, Uri, Method, Body};
+use hyper::{
+    header::{HeaderName, HeaderValue},
+    Body, HeaderMap, Method, Uri,
+};
 use reqwest::Error;
 
-
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ResourceData {
     headers: HashMap<String, String>,
     code: u16,
     pub payload: Option<String>,
 }
 
-
 pub fn get_url(uri: &Uri, host: String) -> String {
     host + &uri.to_string()
+}
+
+fn hash_map_to_header_map(map: HashMap<String, String>) -> HeaderMap {
+    let keys = map.keys();
+    let mut out = HeaderMap::new();
+
+    for key in keys {
+        if let Some(value) = map.get(key) {
+            let key = HeaderName::from_str(&key.to_owned().as_str());
+            if let Ok(key) = key {
+                let value = HeaderValue::from_str(&value.to_owned().as_str());
+                if let Ok(value) = value {
+                    log::info!("Some header");
+                    out.insert(key, value);
+                }
+            }
+        }
+    }
+
+    out
 }
 
 fn header_map_to_hash_map(header: &HeaderMap) -> HashMap<String, String> {
@@ -40,9 +61,7 @@ pub async fn fetch_request(
     let client = reqwest::Client::new();
     let mut req = client.request(method, url);
 
-    //if let Ok(header) = header.try_from() {
-    //req.headers(header);
-    //}
+    req = req.headers(hash_map_to_header_map(header));
 
     if let Some(body) = body {
         req = req.body(body);
@@ -76,17 +95,16 @@ pub async fn get_body(body: Body) -> Option<String> {
         Ok(bytes) => match String::from_utf8(bytes.to_vec()) {
             Ok(content) => Some(content),
             Err(err) => {
-                println!("Unable to parse body content as utf8, {:?}", err);
+                log::error!("Unable to parse body content as utf8, {:?}", err);
                 None
             }
         },
         Err(err) => {
-            println!("Unable to get bytes form request, {:?}", err);
+            log::error!("Unable to get bytes form request, {:?}", err);
             None
         }
     }
 }
-
 
 #[cfg(test)]
 #[path = "./builder_test.rs"]

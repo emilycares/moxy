@@ -5,7 +5,7 @@ use hyper::{Body, Request, Response};
 use crate::{builder, configuration, data_loader};
 
 pub async fn endpoint(req: Request<Body>) -> Result<Response<Body>, Infallible> {
-    println!("{}", req.uri());
+    log::debug!("{}", req.uri());
     let config = configuration::get_configuration();
     let routes = config.get_routes();
     let host = config.get_host();
@@ -20,7 +20,7 @@ pub async fn endpoint(req: Request<Body>) -> Result<Response<Body>, Infallible> 
 
         Ok(response)
     } else {
-        println!("{:?}", &req);
+        log::debug!("{:?}", &req);
 
         let response = builder::fetch_request(
             req.method().clone(),

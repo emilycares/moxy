@@ -69,19 +69,19 @@ pub fn get_route<'a>(
 
 #[cached]
 fn load_configuration(loaction: String) -> Configuration {
-    println!("Load Configuration: {}", loaction);
+    log::info!("Load Configuration: {}", loaction);
     let data = fs::read_to_string(&loaction).unwrap_or_else(|error| {
         if error.kind() == ErrorKind::NotFound {
             File::create(loaction)
                 .unwrap_or_else(|error| panic!("Could not open configuration file: {:?}", error));
         } else {
-            println!("Could not open configuration file: {:?}", error);
+            log::info!("Could not open configuration file: {:?}", error);
         }
         "".to_string()
     });
 
     serde_json::from_str(&data).unwrap_or_else(|error| {
-        println!("Could not load configuration file: {:?}", error);
+        log::error!("Could not load configuration file: {:?}", error);
         Configuration {
             routes: vec![],
             host: String::from("http://localhost"),
