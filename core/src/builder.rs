@@ -1,20 +1,71 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, convert::Infallible, str::FromStr};
 
 use hyper::{
     header::{HeaderName, HeaderValue},
-    Body, HeaderMap, Method, Uri,
+    Body, HeaderMap, Method, Request, Response, Uri,
 };
 use reqwest::Error;
 
-#[derive(Clone)]
+use crate::configuration::{self, BuildMode};
+
 pub struct ResourceData {
-    headers: HashMap<String, String>,
-    code: u16,
+    pub headers: HashMap<String, String>,
+    pub code: u16,
     pub payload: Option<String>,
 }
 
-pub fn get_url(uri: &Uri, host: String) -> String {
-    host + &uri.to_string()
+pub async fn build_response(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+    let config = configuration::get_configuration();
+    if let Some(build_mode) = &config.build_mode {
+        let response = fetch_request(
+            req.method().clone(),
+            get_url(&req.uri(), &config.remote),
+            None,
+            HashMap::new(),
+        )
+        .await;
+
+        match response {
+            Some(response) => {
+                if let Some(body) = response.payload {
+                    let client_response = Response::builder()
+                        .status(response.code)
+                        .body(Body::from(body.clone()))
+                        .unwrap();
+
+                    if &response.code != &404 {
+                        if build_mode == &BuildMode::Write {
+                            save(req.uri().path(), body).await
+                        }
+                    }
+
+                    Ok(client_response)
+                } else {
+                    let response = Response::builder().status(404).body(Body::empty()).unwrap();
+                    Ok(response)
+                }
+            }
+            None => todo!(),
+        }
+    } else {
+        log::info!("Resource not found and build mode disabled");
+        let response = Response::builder().status(404).body(Body::empty()).unwrap();
+        Ok(response)
+    }
+}
+
+async fn save(uri: &str, body: String) {
+    let mut path = "./db".to_owned() + uri;
+
+    if path.ends_with("/") {
+        path = path + "index";
+    }
+
+    log::debug!("Save path: {}", &path)
+}
+
+pub fn get_url(uri: &Uri, host: &String) -> String {
+    host.to_owned() + &uri.to_string()
 }
 
 fn hash_map_to_header_map(map: HashMap<String, String>) -> HeaderMap {

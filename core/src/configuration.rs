@@ -12,19 +12,18 @@ pub struct Route {
     pub resource: String,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Configuration {
-    routes: Vec<Route>,
-    host: String,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum BuildMode {
+    Read,
+    Write
 }
 
-impl Configuration {
-    pub fn get_routes(&self) -> Vec<Route> {
-        self.clone().routes
-    }
-    pub fn get_host(&self) -> String {
-        self.clone().host
-    }
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Configuration {
+    pub routes: Vec<Route>,
+    pub host: Option<String>,
+    pub remote: String,
+    pub build_mode: Option<BuildMode>
 }
 
 pub fn get_configuration() -> Configuration {
@@ -84,7 +83,9 @@ fn load_configuration(loaction: String) -> Configuration {
         log::error!("Could not load configuration file: {:?}", error);
         Configuration {
             routes: vec![],
-            host: String::from("http://localhost"),
+            host: Some(String::from("127.0.0.1:8080")),
+            remote: String::from("http://localhost"),
+            build_mode: None
         }
     })
 }
