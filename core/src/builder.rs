@@ -55,13 +55,18 @@ pub async fn build_response(req: Request<Body>) -> Result<Response<Body>, Infall
 }
 
 async fn save(uri: &str, body: String) {
+    let path = get_save_path(uri);
+}
+
+pub fn get_save_path(uri: &str) -> String {
     let mut path = "./db".to_owned() + uri;
 
     if path.ends_with("/") {
         path = path + "index";
     }
 
-    log::debug!("Save path: {}", &path)
+    log::debug!("Save path: {}", &path);
+    path
 }
 
 pub fn get_url(uri: &Uri, host: &String) -> String {

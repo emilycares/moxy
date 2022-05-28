@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use hyper::{Method, Body};
 
-use super::{get_body, fetch_request};
+use crate::builder::{get_body, get_save_path};
+
+use super::fetch_request;
 
 #[tokio::test]
 async fn requrest_no_body() {
@@ -26,4 +28,18 @@ async fn get_body_should_return_some_of_empty_string_when_body_is_empty() {
 async fn get_body_should_return_none_when_body_is_to_large() {
     let body = get_body(Body::empty()).await;
 
+}
+
+#[test]
+fn get_save_path_should_start_with_db() {
+    let path = get_save_path("/index.html");
+
+    assert!(&path.starts_with("./db"));
+}
+
+#[test]
+fn get_save_path_should_add_index_if_folder() {
+    let path = get_save_path("/");
+
+    assert!(&path.ends_with("/index"));
 }
