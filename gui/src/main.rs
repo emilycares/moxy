@@ -22,27 +22,27 @@ impl Gui {
     }
 
     fn configure_fonts(&self, ctx: &eframe::egui::Context) {
-        let mut fonts = FontDefinitions::default();
-        fonts.font_data.insert(
-            "SauceCodePro".to_owned(),
-            FontData::from_static(include_bytes!("../assets/SauceCodeProMediumNF.ttf")),
-        );
+        //let mut fonts = FontDefinitions::default();
+        //fonts.font_data.insert(
+            //"SauceCodePro".to_owned(),
+            //FontData::from_static(include_bytes!("../assets/SauceCodeProMediumNF.ttf")),
+        //);
 
-        // Put my font first (highest priority):
-        fonts
-            .families
-            .get_mut(&FontFamily::Proportional)
-            .unwrap()
-            .insert(0, "SauceCodePro".to_owned());
+        //// Put my font first (highest priority):
+        //fonts
+            //.families
+            //.get_mut(&FontFamily::Proportional)
+            //.unwrap()
+            //.insert(0, "SauceCodePro".to_owned());
 
-        // Put my font as last fallback for monospace:
-        fonts
-            .families
-            .get_mut(&FontFamily::Monospace)
-            .unwrap()
-            .push("SauceCodePro".to_owned());
+        //// Put my font as last fallback for monospace:
+        //fonts
+            //.families
+            //.get_mut(&FontFamily::Monospace)
+            //.unwrap()
+            //.push("SauceCodePro".to_owned());
 
-        ctx.set_fonts(fonts);
+        //ctx.set_fonts(fonts);
     }
 }
 

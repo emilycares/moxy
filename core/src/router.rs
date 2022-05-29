@@ -1,14 +1,15 @@
-use std::convert::Infallible;
+use std::{convert::Infallible, sync::Arc};
 
+use tokio::sync::Mutex;
 use hyper::{Body, Request, Response};
 
 use crate::{
     builder,
-    configuration,
+    configuration::{self, Configuration},
     data_loader,
 };
 
-pub async fn endpoint(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+pub async fn endpoint(req: Request<Body>, config: Arc<Mutex<Configuration>>) -> Result<Response<Body>, Infallible> {
     log::debug!("{}", req.uri());
     let config = configuration::get_configuration();
     let (route, parameter) =

@@ -2,7 +2,12 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Server,
 };
-use std::{convert::Infallible, net::SocketAddr};
+use std::{
+    convert::Infallible,
+    net::SocketAddr,
+    sync::{Arc},
+};
+use tokio::sync::Mutex;
 
 pub mod builder;
 pub mod configuration;
@@ -15,16 +20,24 @@ extern crate pretty_env_logger;
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     pretty_env_logger::init();
     let mut config = configuration::get_configuration();
-
     if config.host == None {
         config.host = Some("127.0.0.1:8080".to_string());
     }
+    let addr: Result<SocketAddr, _> = config.host.as_ref().unwrap().parse();
 
-    let addr: Result<SocketAddr, _> = config.host.unwrap().parse();
+    let mut config = Arc::new(Mutex::new(config));
 
     if let Ok(addr) = addr {
-        let make_service =
-            make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(router::endpoint)) });
+        let make_service = make_service_fn(move |_| {
+            let config = config.clone();
+
+            async move {
+                Ok::<_, hyper::Error>(service_fn(move |req| {
+                    let config = config.clone();
+                    async move { router::endpoint(req, config).await }
+                }))
+            }
+        });
 
         log::info!("Starting http server");
         let server = Server::bind(&addr).serve(make_service);
