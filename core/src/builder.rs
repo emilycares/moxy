@@ -19,7 +19,7 @@ pub async fn build_response(req: Request<Body>) -> Result<Response<Body>, Infall
     if let Some(build_mode) = &config.build_mode {
         let response = fetch_request(
             req.method().clone(),
-            get_url(&req.uri(), &config.remote),
+            get_url(req.uri(), &config.remote),
             None,
             HashMap::new(),
         )
@@ -33,10 +33,8 @@ pub async fn build_response(req: Request<Body>) -> Result<Response<Body>, Infall
                         .body(Body::from(body.clone()))
                         .unwrap();
 
-                    if &response.code != &404 {
-                        if build_mode == &BuildMode::Write {
-                            save(req.uri().path(), body).await
-                        }
+                    if response.code != 404 && build_mode == &BuildMode::Write {
+                        save(req.uri().path(), body).await
                     }
 
                     Ok(client_response)
@@ -54,15 +52,15 @@ pub async fn build_response(req: Request<Body>) -> Result<Response<Body>, Infall
     }
 }
 
-async fn save(uri: &str, body: String) {
-    let path = get_save_path(uri);
+async fn save(uri: &str, _body: String) {
+    let _path = get_save_path(uri);
 }
 
 pub fn get_save_path(uri: &str) -> String {
     let mut path = "./db".to_owned() + uri;
 
-    if path.ends_with("/") {
-        path = path + "index";
+    if path.ends_with('/') {
+        path += "index"
     }
 
     log::debug!("Save path: {}", &path);
@@ -79,9 +77,9 @@ fn hash_map_to_header_map(map: HashMap<String, String>) -> HeaderMap {
 
     for key in keys {
         if let Some(value) = map.get(key) {
-            let key = HeaderName::from_str(&key.to_owned().as_str());
+            let key = HeaderName::from_str(key.to_owned().as_str());
             if let Ok(key) = key {
-                let value = HeaderValue::from_str(&value.to_owned().as_str());
+                let value = HeaderValue::from_str(value.to_owned().as_str());
                 if let Ok(value) = value {
                     log::info!("Some header");
                     out.insert(key, value);
@@ -127,7 +125,7 @@ pub async fn fetch_request(
 
     if let Ok(response) = response {
         return Some(ResourceData {
-            headers: header_map_to_hash_map(&response.headers()),
+            headers: header_map_to_hash_map(response.headers()),
             code: response.status().as_u16(),
             payload: get_payload(&response.text().await),
         });

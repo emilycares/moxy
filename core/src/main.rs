@@ -2,11 +2,7 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Server,
 };
-use std::{
-    convert::Infallible,
-    net::SocketAddr,
-    sync::{Arc},
-};
+use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 
 pub mod builder;
@@ -25,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
     let addr: Result<SocketAddr, _> = config.host.as_ref().unwrap().parse();
 
-    let mut config = Arc::new(Mutex::new(config));
+    let config = Arc::new(Mutex::new(config));
 
     if let Ok(addr) = addr {
         let make_service = make_service_fn(move |_| {

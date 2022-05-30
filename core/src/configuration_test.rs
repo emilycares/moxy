@@ -126,20 +126,16 @@ fn dynamic_route_with_different_end() {
 #[test]
 fn dynamic_paramerter_end() {
     let method = r#"get"#;
-    let routes = vec![
-        Route {
-            method: method.to_string(),
-            path: "/api/test/$$$".to_string(),
-            resource: "db/api/$$$".to_string(),
-        },
-    ];
+    let routes = vec![Route {
+        method: method.to_string(),
+        path: "/api/test/$$$".to_string(),
+        resource: "db/api/$$$".to_string(),
+    }];
 
     assert_eq!(
         get_route(
             &routes,
-            &"http://localhost:8080/api/test/abc"
-                .parse::<Uri>()
-                .unwrap(),
+            &"http://localhost:8080/api/test/abc".parse::<Uri>().unwrap(),
             method
         )
         .1
@@ -151,13 +147,11 @@ fn dynamic_paramerter_end() {
 #[test]
 fn dynamic_paramerter_middle() {
     let method = r#"get"#;
-    let routes = vec![
-        Route {
-            method: method.to_string(),
-            path: "/api/test/$$$.txt".to_string(),
-            resource: "db/api/$$$.txt".to_string(),
-        },
-    ];
+    let routes = vec![Route {
+        method: method.to_string(),
+        path: "/api/test/$$$.txt".to_string(),
+        resource: "db/api/$$$.txt".to_string(),
+    }];
 
     assert_eq!(
         get_route(

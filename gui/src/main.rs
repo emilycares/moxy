@@ -1,6 +1,5 @@
 use eframe::{
-    egui::{self, CentralPanel, FontData, FontDefinitions, ScrollArea},
-    epaint::FontFamily,
+    egui::{self, CentralPanel, ScrollArea},
     epi::App,
     run_native, NativeOptions,
 };
@@ -21,26 +20,26 @@ impl Gui {
         }
     }
 
-    fn configure_fonts(&self, ctx: &eframe::egui::Context) {
+    fn configure_fonts(&self, _ctx: &eframe::egui::Context) {
         //let mut fonts = FontDefinitions::default();
         //fonts.font_data.insert(
-            //"SauceCodePro".to_owned(),
-            //FontData::from_static(include_bytes!("../assets/SauceCodeProMediumNF.ttf")),
+        //"SauceCodePro".to_owned(),
+        //FontData::from_static(include_bytes!("../assets/SauceCodeProMediumNF.ttf")),
         //);
 
         //// Put my font first (highest priority):
         //fonts
-            //.families
-            //.get_mut(&FontFamily::Proportional)
-            //.unwrap()
-            //.insert(0, "SauceCodePro".to_owned());
+        //.families
+        //.get_mut(&FontFamily::Proportional)
+        //.unwrap()
+        //.insert(0, "SauceCodePro".to_owned());
 
         //// Put my font as last fallback for monospace:
         //fonts
-            //.families
-            //.get_mut(&FontFamily::Monospace)
-            //.unwrap()
-            //.push("SauceCodePro".to_owned());
+        //.families
+        //.get_mut(&FontFamily::Monospace)
+        //.unwrap()
+        //.push("SauceCodePro".to_owned());
 
         //ctx.set_fonts(fonts);
     }
@@ -74,15 +73,14 @@ impl App for Gui {
                         }
                     });
                 });
-            egui::CentralPanel::default()
-                .show_inside(ui, |ui| {
-                    ScrollArea::vertical().id_source(1).show(ui, |ui| {
-                        for a in &self.requests {
-                            ui.label(&a.url);
-                            ui.label(&a.content);
-                        }
-                    });
+            egui::CentralPanel::default().show_inside(ui, |ui| {
+                ScrollArea::vertical().id_source(1).show(ui, |ui| {
+                    for a in &self.requests {
+                        ui.label(&a.url);
+                        ui.label(&a.content);
+                    }
                 });
+            });
         });
     }
 

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use hyper::{Method, Body};
+use hyper::{Body, Method};
 
 use crate::builder::{get_body, get_save_path};
 
@@ -13,8 +13,9 @@ async fn requrest_no_body() {
         "http://google.com".to_string(),
         None,
         HashMap::new(),
-        )
-        .await.unwrap();
+    )
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
@@ -27,7 +28,6 @@ async fn get_body_should_return_some_of_empty_string_when_body_is_empty() {
 #[tokio::test]
 async fn get_body_should_return_none_when_body_is_to_large() {
     let body = get_body(Body::empty()).await;
-
 }
 
 #[test]

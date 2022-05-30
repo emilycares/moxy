@@ -15,7 +15,7 @@ pub struct Route {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum BuildMode {
     Read,
-    Write
+    Write,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -23,7 +23,7 @@ pub struct Configuration {
     pub routes: Vec<Route>,
     pub host: Option<String>,
     pub remote: String,
-    pub build_mode: Option<BuildMode>
+    pub build_mode: Option<BuildMode>,
 }
 
 pub fn get_configuration() -> Configuration {
@@ -31,7 +31,7 @@ pub fn get_configuration() -> Configuration {
 }
 
 pub fn get_route<'a>(
-    routes: &'a Vec<Route>,
+    routes: &'a [Route],
     uri: &'a Uri,
     method: &'a str,
 ) -> (Option<&'a Route>, Option<&'a str>) {
@@ -85,7 +85,7 @@ fn load_configuration(loaction: String) -> Configuration {
             routes: vec![],
             host: Some(String::from("127.0.0.1:8080")),
             remote: String::from("http://localhost"),
-            build_mode: None
+            build_mode: None,
         }
     })
 }
