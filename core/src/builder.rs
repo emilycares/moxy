@@ -1,24 +1,34 @@
-use std::{collections::HashMap, convert::Infallible, str::FromStr};
+use std::{collections::HashMap, convert::Infallible, str::FromStr, sync::Arc};
 
 use hyper::{
     header::{HeaderName, HeaderValue},
-    Body, HeaderMap, Method, Request, Response, Uri,
+    Body, HeaderMap, Request, Response, Uri,
 };
 use reqwest::Error;
+use tokio::{fs::File, io::AsyncWriteExt, sync::Mutex};
 
-use crate::configuration::{self, BuildMode};
+use crate::configuration::{BuildMode, Configuration, Route, RouteMethod, self};
 
 pub struct ResourceData {
+    pub method: RouteMethod,
     pub headers: HashMap<String, String>,
     pub code: u16,
     pub payload: Option<String>,
 }
 
-pub async fn build_response(req: Request<Body>) -> Result<Response<Body>, Infallible> {
-    let config = configuration::get_configuration();
+pub async fn build_response(
+    config_a: Arc<Mutex<Configuration>>,
+    req: Request<Body>,
+) -> Result<Response<Body>, Infallible> {
+    log::trace!("Start build");
+    let config_b = config_a.clone();
+    log::trace!("1");
+    let config = config_b.lock().await.to_owned();
+    log::trace!("2");
     if let Some(build_mode) = &config.build_mode {
+        log::trace!("Request");
         let response = fetch_request(
-            req.method().clone(),
+            RouteMethod::from(req.method().clone()),
             get_url(req.uri(), &config.remote),
             None,
             HashMap::new(),
@@ -27,23 +37,38 @@ pub async fn build_response(req: Request<Body>) -> Result<Response<Body>, Infall
 
         match response {
             Some(response) => {
+                log::trace!("Remote responded");
                 if let Some(body) = response.payload {
+                    log::trace!("Create response");
                     let client_response = Response::builder()
                         .status(response.code)
                         .body(Body::from(body.clone()))
                         .unwrap();
 
+                    log::trace!("Checksave");
                     if response.code != 404 && build_mode == &BuildMode::Write {
-                        save(req.uri().path(), body).await
+                        log::trace!("Save");
+                        save(
+                            RouteMethod::from(response.method),
+                            req.uri().path(),
+                            body,
+                            config_a,
+                        )
+                        .await
                     }
 
+                    log::trace!("Send response");
                     Ok(client_response)
                 } else {
                     let response = Response::builder().status(404).body(Body::empty()).unwrap();
+                    log::trace!("Send response (empty)");
                     Ok(response)
                 }
             }
-            None => todo!(),
+            None => {
+                log::error!("No response from endpoint");
+                todo!();
+            }
         }
     } else {
         log::info!("Resource not found and build mode disabled");
@@ -52,8 +77,30 @@ pub async fn build_response(req: Request<Body>) -> Result<Response<Body>, Infall
     }
 }
 
-async fn save(uri: &str, _body: String) {
-    let _path = get_save_path(uri);
+async fn save(method: RouteMethod, uri: &str, body: String, config: Arc<Mutex<Configuration>>) {
+    let path = get_save_path(uri);
+
+    save_file(path.as_str(), body).await;
+
+    let route = Route {
+        method,
+        path: path.clone(),
+        resource: uri.to_owned(),
+    };
+
+    log::info!("Save route: {:?}", route);
+
+    let mut config = config.lock().await;
+    config.routes.push(route);
+
+    configuration::save_configuration(config.to_owned()).await;
+}
+
+async fn save_file(loation: &str, body: String) -> Result<(), std::io::Error> {
+    let mut file = File::create(loation).await?;
+    file.write_all(body.as_bytes()).await?;
+
+    Ok(())
 }
 
 pub fn get_save_path(uri: &str) -> String {
@@ -107,13 +154,13 @@ fn header_map_to_hash_map(header: &HeaderMap) -> HashMap<String, String> {
 }
 
 pub async fn fetch_request(
-    method: Method,
+    method: RouteMethod,
     url: String,
     body: Option<String>,
     header: HashMap<String, String>,
 ) -> Option<ResourceData> {
     let client = reqwest::Client::new();
-    let mut req = client.request(method, url);
+    let mut req = client.request(method.clone().into(), url);
 
     req = req.headers(hash_map_to_header_map(header));
 
@@ -125,6 +172,7 @@ pub async fn fetch_request(
 
     if let Ok(response) = response {
         return Some(ResourceData {
+            method: RouteMethod::from(method),
             headers: header_map_to_hash_map(response.headers()),
             code: response.status().as_u16(),
             payload: get_payload(&response.text().await),

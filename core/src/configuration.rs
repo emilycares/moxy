@@ -1,15 +1,74 @@
 use cached::proc_macro::cached;
-use hyper::Uri;
+use hyper::{Method, Uri};
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::fs::File;
-use std::io::ErrorKind;
+use std::{str::FromStr, io::ErrorKind};
+use tokio::{fs::{self, File}, io::AsyncWriteExt};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Route {
-    pub method: String,
+    pub method: RouteMethod,
     pub path: String,
     pub resource: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum RouteMethod {
+    GET,
+    HEAD,
+    POST,
+    PUT,
+    DELETE,
+    CONNECT,
+    OPTIONS,
+    TRACE,
+    PATCH,
+}
+
+impl FromStr for RouteMethod {
+    type Err = u8;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "GET" => Ok(Self::GET),
+            "HEAD" => Ok(Self::HEAD),
+            "POST" => Ok(Self::POST),
+            "PUT" => Ok(Self::PUT),
+            "DELETE" => Ok(Self::DELETE),
+            "CONNECT" => Ok(Self::CONNECT),
+            "OPTIONS" => Ok(Self::OPTIONS),
+            "TRACE" => Ok(Self::TRACE),
+            "PATCH" => Ok(Self::PATCH),
+            _ => Err(1),
+        }
+    }
+}
+
+impl From<Method> for RouteMethod {
+    fn from(m: hyper::Method) -> Self {
+        RouteMethod::from_str(m.as_str()).unwrap()
+    }
+}
+
+impl From<&Method> for RouteMethod {
+    fn from(m: &hyper::Method) -> Self {
+        RouteMethod::from_str(m.as_str()).unwrap()
+    }
+}
+
+impl Into<Method> for RouteMethod {
+    fn into(self) -> Method {
+        match self {
+            RouteMethod::GET => Method::GET,
+            RouteMethod::HEAD => Method::HEAD,
+            RouteMethod::POST => Method::POST,
+            RouteMethod::PUT => Method::PUT,
+            RouteMethod::DELETE => Method::DELETE,
+            RouteMethod::CONNECT => Method::CONNECT,
+            RouteMethod::OPTIONS => Method::OPTIONS,
+            RouteMethod::TRACE => Method::TRACE,
+            RouteMethod::PATCH => Method::PATCH,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -26,14 +85,14 @@ pub struct Configuration {
     pub build_mode: Option<BuildMode>,
 }
 
-pub fn get_configuration() -> Configuration {
-    load_configuration("./mockit.json".to_string())
+pub async fn get_configuration() -> Configuration {
+    load_configuration("./mockit.json".to_string()).await
 }
 
 pub fn get_route<'a>(
     routes: &'a [Route],
     uri: &'a Uri,
-    method: &'a str,
+    method: RouteMethod,
 ) -> (Option<&'a Route>, Option<&'a str>) {
     for i in routes.iter() {
         if i.method.eq(&method) {
@@ -67,11 +126,11 @@ pub fn get_route<'a>(
 }
 
 #[cached]
-fn load_configuration(loaction: String) -> Configuration {
+async fn load_configuration(loaction: String) -> Configuration {
     log::info!("Load Configuration: {}", loaction);
-    let data = fs::read_to_string(&loaction).unwrap_or_else(|error| {
+    let data = fs::read_to_string(&loaction).await.unwrap_or_else(|error| {
         if error.kind() == ErrorKind::NotFound {
-            File::create(loaction)
+            std::fs::File::create(loaction)
                 .unwrap_or_else(|error| panic!("Could not open configuration file: {:?}", error));
         } else {
             log::info!("Could not open configuration file: {:?}", error);
@@ -88,6 +147,15 @@ fn load_configuration(loaction: String) -> Configuration {
             build_mode: None,
         }
     })
+}
+
+pub async fn save_configuration(configuration: Configuration) -> Result<(), std::io::Error> {
+    let config: String = serde_json::to_string(&configuration)?;
+    let mut file = File::open("./mockit.json").await?;
+
+    file.write_all(config.as_bytes()).await?;
+
+    Ok(())
 }
 
 #[cfg(test)]

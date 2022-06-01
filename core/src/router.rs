@@ -5,18 +5,19 @@ use tokio::sync::Mutex;
 
 use crate::{
     builder,
-    configuration::{self, Configuration},
+    configuration::{self, Configuration, RouteMethod},
     data_loader,
 };
 
 pub async fn endpoint(
     req: Request<Body>,
-    _config: Arc<Mutex<Configuration>>,
+    config_a: Arc<Mutex<Configuration>>,
 ) -> Result<Response<Body>, Infallible> {
     log::debug!("{}", req.uri());
-    let config = configuration::get_configuration();
+    let configc = config_a.clone();
+    let config = configc.lock().await.to_owned();
     let (route, parameter) =
-        configuration::get_route(&config.routes, req.uri(), req.method().as_str());
+        configuration::get_route(&config.routes, req.uri(), RouteMethod::from(req.method()));
 
     if route.is_some() {
         let data = data_loader::load(route.unwrap(), parameter);
@@ -27,6 +28,6 @@ pub async fn endpoint(
 
         Ok(response)
     } else {
-        builder::build_response(req).await
+        builder::build_response(config_a, req).await
     }
 }

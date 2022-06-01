@@ -1,15 +1,18 @@
 use std::collections::HashMap;
 
-use hyper::{Body, Method};
+use hyper::Body;
 
-use crate::builder::{get_body, get_save_path};
+use crate::{
+    builder::{get_body, get_save_path},
+    configuration::RouteMethod,
+};
 
 use super::fetch_request;
 
 #[tokio::test]
 async fn requrest_no_body() {
-    let reponse = fetch_request(
-        Method::GET,
+    let _reponse = fetch_request(
+        RouteMethod::GET,
         "http://google.com".to_string(),
         None,
         HashMap::new(),
@@ -23,11 +26,6 @@ async fn get_body_should_return_some_of_empty_string_when_body_is_empty() {
     let body = get_body(Body::empty()).await;
 
     assert_eq!(body, Some(String::from("")))
-}
-
-#[tokio::test]
-async fn get_body_should_return_none_when_body_is_to_large() {
-    let body = get_body(Body::empty()).await;
 }
 
 #[test]

@@ -15,7 +15,8 @@ extern crate pretty_env_logger;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     pretty_env_logger::init();
-    let mut config = configuration::get_configuration();
+    let mut config = configuration::get_configuration().await;
+    log::trace!("Config: {:?}", config);
     if config.host == None {
         config.host = Some("127.0.0.1:8080".to_string());
     }
