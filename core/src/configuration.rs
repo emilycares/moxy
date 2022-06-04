@@ -1,8 +1,11 @@
 use cached::proc_macro::cached;
 use hyper::{Method, Uri};
 use serde::{Deserialize, Serialize};
-use std::{str::FromStr, io::ErrorKind};
-use tokio::{fs::{self, File}, io::AsyncWriteExt};
+use std::{io::ErrorKind, str::FromStr};
+use tokio::{
+    fs::{self, File},
+    io::AsyncWriteExt,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Route {
@@ -79,10 +82,21 @@ pub enum BuildMode {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Configuration {
-    pub routes: Vec<Route>,
     pub host: Option<String>,
-    pub remote: String,
+    pub remote: Option<String>,
     pub build_mode: Option<BuildMode>,
+    pub routes: Vec<Route>,
+}
+
+impl Configuration {
+    pub fn has_route(&self, path: &str) -> bool {
+      let matching_routes = self
+            .routes
+            .iter()
+            .find(|c| c.path.as_str() == path);
+
+      return matching_routes.is_some();
+    }
 }
 
 pub async fn get_configuration() -> Configuration {
@@ -143,17 +157,19 @@ async fn load_configuration(loaction: String) -> Configuration {
         Configuration {
             routes: vec![],
             host: Some(String::from("127.0.0.1:8080")),
-            remote: String::from("http://localhost"),
+            remote: Some(String::from("http://localhost")),
             build_mode: None,
         }
     })
 }
 
 pub async fn save_configuration(configuration: Configuration) -> Result<(), std::io::Error> {
-    let config: String = serde_json::to_string(&configuration)?;
-    let mut file = File::open("./mockit.json").await?;
+    let config: String = serde_json::to_string_pretty(&configuration)?;
+    let mut file = File::create("./mockit.json").await?;
 
     file.write_all(config.as_bytes()).await?;
+
+    file.flush().await?;
 
     Ok(())
 }

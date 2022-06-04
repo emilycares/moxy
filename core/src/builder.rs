@@ -7,7 +7,7 @@ use hyper::{
 use reqwest::Error;
 use tokio::{fs::File, io::AsyncWriteExt, sync::Mutex};
 
-use crate::configuration::{BuildMode, Configuration, Route, RouteMethod, self};
+use crate::configuration::{self, BuildMode, Configuration, Route, RouteMethod};
 
 pub struct ResourceData {
     pub method: RouteMethod,
@@ -20,55 +20,51 @@ pub async fn build_response(
     config_a: Arc<Mutex<Configuration>>,
     req: Request<Body>,
 ) -> Result<Response<Body>, Infallible> {
-    log::trace!("Start build");
     let config_b = config_a.clone();
-    log::trace!("1");
     let config = config_b.lock().await.to_owned();
-    log::trace!("2");
     if let Some(build_mode) = &config.build_mode {
-        log::trace!("Request");
-        let response = fetch_request(
-            RouteMethod::from(req.method().clone()),
-            get_url(req.uri(), &config.remote),
-            None,
-            HashMap::new(),
-        )
-        .await;
+        if let Some(remote) = &config.remote {
+            let response = fetch_request(
+                RouteMethod::from(req.method().clone()),
+                get_url(req.uri(), remote),
+                None,
+                HashMap::new(),
+            )
+            .await;
 
-        match response {
-            Some(response) => {
-                log::trace!("Remote responded");
-                if let Some(body) = response.payload {
-                    log::trace!("Create response");
-                    let client_response = Response::builder()
-                        .status(response.code)
-                        .body(Body::from(body.clone()))
-                        .unwrap();
+            match response {
+                Some(response) => {
+                    if let Some(body) = response.payload {
+                        let client_response = Response::builder()
+                            .status(response.code)
+                            .body(Body::from(body.clone()))
+                            .unwrap();
 
-                    log::trace!("Checksave");
-                    if response.code != 404 && build_mode == &BuildMode::Write {
-                        log::trace!("Save");
-                        save(
-                            RouteMethod::from(response.method),
-                            req.uri().path(),
-                            body,
-                            config_a,
-                        )
-                        .await
+                        if response.code != 404 && build_mode == &BuildMode::Write {
+                            save(
+                                RouteMethod::from(response.method),
+                                req.uri().path(),
+                                body,
+                                config_a,
+                            )
+                            .await
+                        }
+
+                        Ok(client_response)
+                    } else {
+                        let response = Response::builder().status(404).body(Body::empty()).unwrap();
+                        Ok(response)
                     }
-
-                    log::trace!("Send response");
-                    Ok(client_response)
-                } else {
-                    let response = Response::builder().status(404).body(Body::empty()).unwrap();
-                    log::trace!("Send response (empty)");
-                    Ok(response)
+                }
+                None => {
+                    log::error!("No response from endpoint");
+                    todo!();
                 }
             }
-            None => {
-                log::error!("No response from endpoint");
-                todo!();
-            }
+        } else {
+            log::info!("Resource not found and no remove specified");
+            let response = Response::builder().status(404).body(Body::empty()).unwrap();
+            Ok(response)
         }
     } else {
         log::info!("Resource not found and build mode disabled");
@@ -79,21 +75,21 @@ pub async fn build_response(
 
 async fn save(method: RouteMethod, uri: &str, body: String, config: Arc<Mutex<Configuration>>) {
     let path = get_save_path(uri);
-
-    save_file(path.as_str(), body).await;
-
-    let route = Route {
-        method,
-        path: path.clone(),
-        resource: uri.to_owned(),
-    };
-
-    log::info!("Save route: {:?}", route);
-
     let mut config = config.lock().await;
-    config.routes.push(route);
+    if !config.has_route(&path) {
+        let route = Route {
+            method,
+            resource: path.clone(),
+            path: uri.to_owned(),
+        };
+        log::info!("Save route: {:?}", route);
 
-    configuration::save_configuration(config.to_owned()).await;
+        config.routes.push(route);
+
+        configuration::save_configuration(config.to_owned()).await;
+
+        save_file(path.as_str(), body).await;
+    }
 }
 
 async fn save_file(loation: &str, body: String) -> Result<(), std::io::Error> {
@@ -110,7 +106,6 @@ pub fn get_save_path(uri: &str) -> String {
         path += "index"
     }
 
-    log::debug!("Save path: {}", &path);
     path
 }
 

@@ -2,6 +2,8 @@ use hyper::Uri;
 
 use crate::configuration::{get_route, Route, RouteMethod};
 
+use super::Configuration;
+
 #[test]
 fn static_route() {
     let routes = vec![Route {
@@ -14,6 +16,64 @@ fn static_route() {
 
     assert_eq!(result.unwrap().resource, routes[0].resource);
     assert_eq!(parameter, None);
+}
+
+#[test]
+fn configuration_has_route_should_find_no_route() {
+    let configuration = Configuration {
+        routes: vec![
+            Route {
+                method: RouteMethod::GET,
+                path: "/a".to_string(),
+                resource: "somefile.txt".to_string(),
+            },
+            Route {
+                method: RouteMethod::GET,
+                path: "/b".to_string(),
+                resource: "somefile.txt".to_string(),
+            },
+            Route {
+                method: RouteMethod::GET,
+                path: "/c".to_string(),
+                resource: "somefile.txt".to_string(),
+            },
+        ],
+        host: None,
+        remote: None,
+        build_mode: None,
+    };
+
+    assert!(!configuration.has_route("/abc"));
+}
+
+#[test]
+fn configuration_has_route_should_find_route() {
+    let configuration = Configuration {
+        routes: vec![
+            Route {
+                method: RouteMethod::GET,
+                path: "/a".to_string(),
+                resource: "somefile.txt".to_string(),
+            },
+            Route {
+                method: RouteMethod::GET,
+                path: "/b".to_string(),
+                resource: "somefile.txt".to_string(),
+            },
+            Route {
+                method: RouteMethod::GET,
+                path: "/c".to_string(),
+                resource: "somefile.txt".to_string(),
+            },
+        ],
+        host: None,
+        remote: None,
+        build_mode: None,
+    };
+
+    assert!(configuration.has_route("/a"));
+    assert!(configuration.has_route("/b"));
+    assert!(configuration.has_route("/c"));
 }
 
 #[test]
