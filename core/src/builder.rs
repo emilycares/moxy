@@ -1,6 +1,7 @@
 use std::{collections::HashMap, convert::Infallible, str::FromStr, sync::Arc};
 
 use hyper::{
+    body::Bytes,
     header::{HeaderName, HeaderValue},
     Body, HeaderMap, Request, Response, Uri,
 };
@@ -17,7 +18,7 @@ pub struct ResourceData {
     pub method: RouteMethod,
     pub headers: HashMap<String, String>,
     pub code: u16,
-    pub payload: Option<String>,
+    pub payload: Option<Vec<u8>>,
 }
 
 pub async fn build_response(
@@ -45,28 +46,28 @@ pub async fn build_response(
                             .unwrap();
 
                         if response.code != 404 && build_mode == &BuildMode::Write {
-                            save(
-                                RouteMethod::from(response.method),
-                                req.uri().path(),
-                                body,
-                                config_a,
-                            )
-                            .await
+                            save(response.method, req.uri().path(), body, config_a)
+                                .await
+                                .unwrap()
                         }
 
                         Ok(client_response)
                     } else {
-                        let response = Response::builder().status(404).body(Body::empty()).unwrap();
+                        let response = Response::builder()
+                            .status(response.code)
+                            .body(Body::empty())
+                            .unwrap();
                         Ok(response)
                     }
                 }
                 None => {
                     log::error!("No response from endpoint");
-                    todo!();
+                    let response = Response::builder().status(404).body(Body::empty()).unwrap();
+                    Ok(response)
                 }
             }
         } else {
-            log::info!("Resource not found and no remove specified");
+            log::error!("Resource not found and no remove specified");
             let response = Response::builder().status(404).body(Body::empty()).unwrap();
             Ok(response)
         }
@@ -77,7 +78,12 @@ pub async fn build_response(
     }
 }
 
-async fn save(method: RouteMethod, uri: &str, body: String, config: Arc<Mutex<Configuration>>) {
+async fn save(
+    method: RouteMethod,
+    uri: &str,
+    body: Vec<u8>,
+    config: Arc<Mutex<Configuration>>,
+) -> Result<(), std::io::Error> {
     let path = get_save_path(uri);
     let mut config = config.lock().await;
     if !config.has_route(&path) {
@@ -90,12 +96,14 @@ async fn save(method: RouteMethod, uri: &str, body: String, config: Arc<Mutex<Co
 
         config.routes.push(route);
 
-        save_file(path.as_str(), body).await;
-        configuration::save_configuration(config.to_owned()).await;
+        save_file(path.as_str(), body).await?;
+        configuration::save_configuration(config.to_owned()).await?;
     }
+
+    Ok(())
 }
 
-async fn save_file(location: &str, body: String) -> Result<(), std::io::Error> {
+async fn save_file(location: &str, body: Vec<u8>) -> Result<(), std::io::Error> {
     let folders: String = if let Some(index) = location.rfind('/') {
         location[0..index].to_owned()
     } else {
@@ -105,7 +113,7 @@ async fn save_file(location: &str, body: String) -> Result<(), std::io::Error> {
     fs::create_dir_all(folders).await?;
 
     let mut file = File::create(location).await?;
-    file.write_all(body.as_bytes()).await?;
+    file.write_all(&body).await?;
 
     Ok(())
 }
@@ -178,19 +186,19 @@ pub async fn fetch_request(
 
     if let Ok(response) = response {
         return Some(ResourceData {
-            method: RouteMethod::from(method),
+            method,
             headers: header_map_to_hash_map(response.headers()),
             code: response.status().as_u16(),
-            payload: get_payload(&response.text().await),
+            payload: get_payload(response.bytes().await),
         });
     }
 
     None
 }
 
-fn get_payload(text: &Result<String, Error>) -> Option<String> {
-    match text {
-        Ok(p) => Some(p.to_string()),
+fn get_payload(bytes: Result<Bytes, Error>) -> Option<Vec<u8>> {
+    match bytes {
+        Ok(bytes) => Some(bytes.to_vec()),
         Err(_) => None,
     }
 }

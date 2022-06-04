@@ -21,12 +21,18 @@ pub async fn endpoint(
 
     if route.is_some() {
         let data = data_loader::load(route.unwrap(), parameter);
-        let response = Response::builder()
-            .status(200)
-            .body(Body::from(data))
-            .unwrap();
+        if let Some(data) = data.await {
+            let response = Response::builder()
+                .status(200)
+                .body(Body::from(data))
+                .unwrap();
 
-        Ok(response)
+            Ok(response)
+        } else {
+            log::error!("Resource not found and Requested file was not found on file system");
+            let response = Response::builder().status(404).body(Body::empty()).unwrap();
+            Ok(response)
+        }
     } else {
         builder::build_response(config_a, req).await
     }

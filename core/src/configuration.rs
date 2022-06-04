@@ -95,7 +95,7 @@ impl Configuration {
             .iter()
             .find(|c| c.path.as_str() == path);
 
-      return matching_routes.is_some();
+      matching_routes.is_some()
     }
 }
 
