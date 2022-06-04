@@ -5,7 +5,11 @@ use hyper::{
     Body, HeaderMap, Request, Response, Uri,
 };
 use reqwest::Error;
-use tokio::{fs::File, io::AsyncWriteExt, sync::Mutex};
+use tokio::{
+    fs::{self, File},
+    io::AsyncWriteExt,
+    sync::Mutex,
+};
 
 use crate::configuration::{self, BuildMode, Configuration, Route, RouteMethod};
 
@@ -86,14 +90,21 @@ async fn save(method: RouteMethod, uri: &str, body: String, config: Arc<Mutex<Co
 
         config.routes.push(route);
 
-        configuration::save_configuration(config.to_owned()).await;
-
         save_file(path.as_str(), body).await;
+        configuration::save_configuration(config.to_owned()).await;
     }
 }
 
-async fn save_file(loation: &str, body: String) -> Result<(), std::io::Error> {
-    let mut file = File::create(loation).await?;
+async fn save_file(location: &str, body: String) -> Result<(), std::io::Error> {
+    let folders: String = if let Some(index) = location.rfind('/') {
+        location[0..index].to_owned()
+    } else {
+        location.to_owned()
+    };
+    log::trace!("Create folders: {}", folders);
+    fs::create_dir_all(folders).await?;
+
+    let mut file = File::create(location).await?;
     file.write_all(body.as_bytes()).await?;
 
     Ok(())
