@@ -142,25 +142,33 @@ pub fn get_route<'a>(
 #[cached]
 async fn load_configuration(loaction: String) -> Configuration {
     log::info!("Load Configuration: {}", loaction);
-    let data = fs::read_to_string(&loaction).await.unwrap_or_else(|error| {
-        if error.kind() == ErrorKind::NotFound {
-            std::fs::File::create(loaction)
-                .unwrap_or_else(|error| panic!("Could not open configuration file: {:?}", error));
-        } else {
-            log::info!("Could not open configuration file: {:?}", error);
-        }
-        "".to_string()
-    });
-
-    serde_json::from_str(&data).unwrap_or_else(|error| {
-        log::error!("Could not load configuration file: {:?}", error);
-        Configuration {
+    match fs::read_to_string(&loaction).await {
+    Ok(data) => {
+        serde_json::from_str(&data).unwrap_or_else(|error| {
+            log::error!("Could not load configuration file: {:?}", error);
+            Configuration {
+                routes: vec![],
+                host: Some(String::from("127.0.0.1:8080")),
+                remote: Some(String::from("http://localhost")),
+                build_mode: None,
+            }
+        })
+    },
+    Err(e) => {
+        let default_configuration = Configuration {
             routes: vec![],
             host: Some(String::from("127.0.0.1:8080")),
             remote: Some(String::from("http://localhost")),
-            build_mode: None,
+            build_mode: Some(BuildMode::Write),
+        };
+        if e.kind() == ErrorKind::NotFound {
+            save_configuration(default_configuration.clone()).await.unwrap();
         }
-    })
+        
+        default_configuration
+    },
+}
+
 }
 
 pub async fn save_configuration(configuration: Configuration) -> Result<(), std::io::Error> {
