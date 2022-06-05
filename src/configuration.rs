@@ -97,7 +97,7 @@ impl Configuration {
 }
 
 pub async fn get_configuration() -> Configuration {
-    load_configuration("./mockit.json".to_string()).await
+    load_configuration("./moxy.json".to_string()).await
 }
 
 pub fn get_route<'a>(
@@ -168,7 +168,7 @@ async fn load_configuration(loaction: String) -> Configuration {
 
 pub async fn save_configuration(configuration: Configuration) -> Result<(), std::io::Error> {
     let config: String = serde_json::to_string_pretty(&configuration)?;
-    let mut file = File::create("./mockit.json").await?;
+    let mut file = File::create("./moxy.json").await?;
 
     file.write_all(config.as_bytes()).await?;
 
