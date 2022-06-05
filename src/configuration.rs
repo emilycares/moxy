@@ -90,12 +90,9 @@ pub struct Configuration {
 
 impl Configuration {
     pub fn has_route(&self, path: &str) -> bool {
-      let matching_routes = self
-            .routes
-            .iter()
-            .find(|c| c.path.as_str() == path);
+        let matching_routes = self.routes.iter().find(|c| c.path.as_str() == path);
 
-      matching_routes.is_some()
+        matching_routes.is_some()
     }
 }
 
@@ -110,11 +107,10 @@ pub fn get_route<'a>(
 ) -> (Option<&'a Route>, Option<&'a str>) {
     for i in routes.iter() {
         if i.method.eq(&method) {
-            let idx = &i.path.find("$$$");
+            let index = &i.path.find("$$$");
             let path = &uri.path();
 
-            if idx.is_some() {
-                let index = &idx.unwrap();
+            if let Some(index) = index {
                 let match_before = &i.path[0..*index];
 
                 if path.starts_with(&match_before) {
@@ -143,8 +139,7 @@ pub fn get_route<'a>(
 async fn load_configuration(loaction: String) -> Configuration {
     log::info!("Load Configuration: {}", loaction);
     match fs::read_to_string(&loaction).await {
-    Ok(data) => {
-        serde_json::from_str(&data).unwrap_or_else(|error| {
+        Ok(data) => serde_json::from_str(&data).unwrap_or_else(|error| {
             log::error!("Could not load configuration file: {:?}", error);
             Configuration {
                 routes: vec![],
@@ -152,23 +147,23 @@ async fn load_configuration(loaction: String) -> Configuration {
                 remote: Some(String::from("http://localhost")),
                 build_mode: None,
             }
-        })
-    },
-    Err(e) => {
-        let default_configuration = Configuration {
-            routes: vec![],
-            host: Some(String::from("127.0.0.1:8080")),
-            remote: Some(String::from("http://localhost")),
-            build_mode: Some(BuildMode::Write),
-        };
-        if e.kind() == ErrorKind::NotFound {
-            save_configuration(default_configuration.clone()).await.unwrap();
-        }
-        
-        default_configuration
-    },
-}
+        }),
+        Err(e) => {
+            let default_configuration = Configuration {
+                routes: vec![],
+                host: Some(String::from("127.0.0.1:8080")),
+                remote: Some(String::from("http://localhost")),
+                build_mode: Some(BuildMode::Write),
+            };
+            if e.kind() == ErrorKind::NotFound {
+                save_configuration(default_configuration.clone())
+                    .await
+                    .unwrap();
+            }
 
+            default_configuration
+        }
+    }
 }
 
 pub async fn save_configuration(configuration: Configuration) -> Result<(), std::io::Error> {

@@ -14,7 +14,17 @@ extern crate pretty_env_logger;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "moxy=info");
+    }
     pretty_env_logger::init();
+
+    start().await;
+
+    Ok(())
+}
+
+async fn start() {
     let mut config = configuration::get_configuration().await;
     log::trace!("Config: {:?}", config);
     if config.host == None {
@@ -46,6 +56,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     } else {
         log::error!("Unable to start application with an invalid host");
     }
-
-    Ok(())
 }
