@@ -1,6 +1,18 @@
-[workspace]
+[package]
+name = "moxy"
+version = "0.1.0"
+authors = ["micmine <micmine4@gmail.com>"]
+edition = "2018"
 
-members = [
-	"core",
-	"gui"
-]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log = "0.4"
+pretty_env_logger = "0.4"
+tokio = { version = "1.0", features = ["full"] }
+hyper = { version = "0.14", features = ["full"]}
+hyper-tls = "0.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+cached = "0.34"
+reqwest = "0.11.10"
