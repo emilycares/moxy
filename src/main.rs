@@ -5,9 +5,14 @@ use hyper::{
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 
+
+#[warn(missing_docs)]
 pub mod builder;
+#[warn(missing_docs)]
 pub mod configuration;
+#[warn(missing_docs)]
 pub mod data_loader;
+#[warn(missing_docs)]
 pub mod router;
 
 extern crate pretty_env_logger;

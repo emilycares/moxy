@@ -1,3 +1,4 @@
+//! Returns a respomse to a given request.
 use std::{convert::Infallible, sync::Arc};
 
 use hyper::{Body, Request, Response};
@@ -9,6 +10,7 @@ use crate::{
     data_loader,
 };
 
+/// Call data_loader or builder depending on if the route exists or not.
 pub async fn endpoint(
     req: Request<Body>,
     config_a: Arc<Mutex<Configuration>>,
@@ -34,6 +36,6 @@ pub async fn endpoint(
             Ok(response)
         }
     } else {
-        builder::build_response(config_a, req).await
+        builder::builder::build_response(config_a, req).await
     }
 }

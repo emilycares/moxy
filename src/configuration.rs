@@ -1,4 +1,5 @@
-use cached::proc_macro::cached;
+//! This contains the configuraton datastructures and the logic how to read and wirte it.
+
 use hyper::{Method, Uri};
 use serde::{Deserialize, Serialize};
 use std::{io::ErrorKind, str::FromStr};
@@ -7,23 +8,37 @@ use tokio::{
     io::AsyncWriteExt,
 };
 
+/// This represents one route that can be navigated to
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Route {
+    /// HTTP method
     pub method: RouteMethod,
+    /// HTTP uri
     pub path: String,
+    /// File storeage location
     pub resource: String,
 }
 
+/// This represents the http method that is used.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum RouteMethod {
+    /// HTTP GET
     GET,
+    /// HTTP HEAD
     HEAD,
+    /// HTTP POST
     POST,
+    /// HTTP PUT
     PUT,
+    /// HTTP DELETE
     DELETE,
+    /// HTTP CONNECT
     CONNECT,
+    /// HTTP OPTIONS
     OPTIONS,
+    /// HTTP TRACE
     TRACE,
+    /// HTTP PATCH
     PATCH,
 }
 
@@ -74,32 +89,67 @@ impl Into<Method> for RouteMethod {
     }
 }
 
+/// The configuration setting for `build_mode`
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum BuildMode {
+    /// This specifies to not modifiy the filesystem or configuraion.
     Read,
+    /// This enables to modify the filesystem and configuration when Needed.
     Write,
 }
 
+/// The datastructure for "moxy.json"
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Configuration {
+    /// Specifies the port to run the http server.
     pub host: Option<String>,
+    /// This url is called in `BuildMode::Write`
     pub remote: Option<String>,
+    /// `BuildMode`
     pub build_mode: Option<BuildMode>,
+    /// A list of all available routes.
     pub routes: Vec<Route>,
 }
 
 impl Configuration {
-    pub fn has_route(&self, path: &str) -> bool {
-        let matching_routes = self.routes.iter().find(|c| c.path.as_str() == path);
+    /// Checks if there is an existing route based on the path and method
+    pub fn has_route(&self, path: &str, method: RouteMethod) -> bool {
+        let matching_routes = self
+            .routes
+            .iter()
+            .find(|c| c.path.as_str() == path && c.method == method);
 
         matching_routes.is_some()
     }
 }
 
+/// Loads the configuration from the filesystem.
 pub async fn get_configuration() -> Configuration {
     load_configuration("./moxy.json".to_string()).await
 }
 
+/// Returns the route and an optional parameter.
+///
+/// The parameter can be used to milify the configuration when there is one dynamic part of the url
+/// and file path.
+///
+/// | uri    | file       |
+/// |--------|------------|
+/// | /a.txt | ./db/a.txt |
+/// | /b.txt | ./db/b.txt |
+/// | /c.txt | ./db/c.txt |
+/// | /d.txt | ./db/d.txt |
+/// | /e.txt | ./db/e.txt |
+///
+/// In order to ceate configuration for this there would be a configuration entry for every uri.
+/// But this can be simplified.
+/// ``` json
+/// {
+///     "method": "GET",
+///     "path": "/$$$.txt",
+///     "resource": "./db/$$$.txt"
+/// }
+/// ```
 pub fn get_route<'a>(
     routes: &'a [Route],
     uri: &'a Uri,
@@ -135,7 +185,6 @@ pub fn get_route<'a>(
     (None, None)
 }
 
-#[cached]
 async fn load_configuration(loaction: String) -> Configuration {
     log::info!("Load Configuration: {}", loaction);
     match fs::read_to_string(&loaction).await {
@@ -166,6 +215,7 @@ async fn load_configuration(loaction: String) -> Configuration {
     }
 }
 
+/// Save configuration to filesystem
 pub async fn save_configuration(configuration: Configuration) -> Result<(), std::io::Error> {
     let config: String = serde_json::to_string_pretty(&configuration)?;
     let mut file = File::create("./moxy.json").await?;

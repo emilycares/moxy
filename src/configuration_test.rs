@@ -43,7 +43,7 @@ fn configuration_has_route_should_find_no_route() {
         build_mode: None,
     };
 
-    assert!(!configuration.has_route("/abc"));
+    assert!(!configuration.has_route("/abc", RouteMethod::GET));
 }
 
 #[test]
@@ -71,9 +71,9 @@ fn configuration_has_route_should_find_route() {
         build_mode: None,
     };
 
-    assert!(configuration.has_route("/a"));
-    assert!(configuration.has_route("/b"));
-    assert!(configuration.has_route("/c"));
+    assert!(configuration.has_route("/a", RouteMethod::GET));
+    assert!(configuration.has_route("/b", RouteMethod::GET));
+    assert!(configuration.has_route("/c", RouteMethod::GET));
 }
 
 #[test]
