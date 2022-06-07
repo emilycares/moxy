@@ -63,14 +63,17 @@ pub async fn save(
 /// any existing files that colide with the folder path.
 async fn check_existing_file(location: &str, folders: &str) -> Result<(), std::io::Error> {
     // Remove file if there was one
+    log::trace!("{:?}", folders);
     if Path::new(&folders).is_file() {
         let prefious_file = Some(fs::read(&location).await);
-        fs::remove_file(&location).await?;
+        fs::remove_file(&folders).await?;
         fs::create_dir_all(&folders).await?;
         let mut index_file = File::create(folders.to_owned() + "/index").await?;
         if let Some(Ok(prefious_file)) = prefious_file {
             index_file.write_all(&prefious_file).await?
         }
+    } else {
+        fs::create_dir_all(&folders).await?;
     }
     Ok(())
 }

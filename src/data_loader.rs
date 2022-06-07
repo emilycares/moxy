@@ -17,7 +17,7 @@ pub async fn load(route: &Route, parameter: Option<&str>) -> Option<Vec<u8>> {
 
 /// Load file for route.
 async fn file(resource: String) -> Result<Vec<u8>, std::io::Error> {
-    log::debug!("Load File: {}", resource);
+    log::trace!("Load File: {}", resource);
     match fs::read(&resource).await {
         Ok(data) => Ok(data),
         Err(e) => Err(e),

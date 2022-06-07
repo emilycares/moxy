@@ -9,7 +9,7 @@ use tokio::{
 };
 
 /// This represents one route that can be navigated to
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Route {
     /// HTTP method
     pub method: RouteMethod,
