@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use hyper::Uri;
 
 use crate::{
-    builder::{request, storage::get_save_path, self},
+    builder::{request, storage::get_save_path},
     configuration::{RouteMethod, Route, get_route},
 };
 

@@ -17,9 +17,9 @@ pub async fn save(
 ) -> Result<(), std::io::Error> {
     let path = get_save_path(uri);
     let mut config = config.lock().await;
-    if !config.has_route(&path, method.clone()) {
+    if config.get_route(&path, method.clone()).is_none() {
         let route = Route {
-            method,
+            method: method.clone(),
             resource: path.clone(),
             path: uri.to_owned(),
         };
@@ -33,14 +33,20 @@ pub async fn save(
             path.to_owned()
         };
 
-        check_existing_file(path.as_str(), folders.as_str()).await?;
+        match check_existing_file(folders.as_str()).await {
+            Ok(path_changes) => {
+                for (from, to) in path_changes {
+                    if let Some(route) = config.get_route_mut(&from.to_owned(), method.clone()) {}
+                }
+            }
+            Err(e) => return Err(e),
+        }
         save_file(path.as_str(), body).await?;
         configuration::save_configuration(config.to_owned()).await?;
     }
 
     Ok(())
 }
-
 
 /// This function will check if there is a file in the current folder structure.
 /// Previous: Triggered with a call to /api/some-service/results
@@ -49,9 +55,9 @@ pub async fn save(
 ///     api/
 ///       some-service/
 ///         results (file)
-/// 
+///
 /// Next: Triggered with a call to /api/some-service/results/micmine
-/// Wanted folder structure: 
+/// Wanted folder structure:
 ///   db/
 ///     api/
 ///       some-service/
@@ -61,21 +67,58 @@ pub async fn save(
 ///
 /// In order to create the file micmine we need to create the folders and need to move awaiy
 /// any existing files that colide with the folder path.
-async fn check_existing_file(location: &str, folders: &str) -> Result<(), std::io::Error> {
+async fn check_existing_file(folders: &str) -> Result<Vec<(String, String)>, std::io::Error> {
     // Remove file if there was one
     log::trace!("{:?}", folders);
-    if Path::new(&folders).is_file() {
-        let prefious_file = Some(fs::read(&location).await);
-        fs::remove_file(&folders).await?;
-        fs::create_dir_all(&folders).await?;
-        let mut index_file = File::create(folders.to_owned() + "/index").await?;
+
+    let path_changes = vec![];
+
+    for f in get_folders_to_check(folders) {
+        match folder_check(f).await {
+            Ok(c) => path_changes.push((f, c)),
+            Err(e) => return Err(e),
+        }
+    }
+
+    Ok(path_changes)
+}
+
+async fn folder_check(folder: String) -> Result<Option<String>, std::io::Error> {
+    if Path::new(&folder).is_file() {
+        let prefious_file = Some(fs::read(&folder).await);
+        fs::remove_file(&folder).await?;
+        fs::create_dir_all(&folder).await?;
+        let path = folder.to_owned() + "/index";
+        let mut index_file = File::create(&path).await?;
         if let Some(Ok(prefious_file)) = prefious_file {
             index_file.write_all(&prefious_file).await?
         }
-    } else {
-        fs::create_dir_all(&folders).await?;
+
+        return Ok(Some(path));
     }
-    Ok(())
+
+    Ok(None)
+}
+
+fn get_folders_to_check(folders: &str) -> Vec<String> {
+    let lft: Vec<&str> = folders.split('/').collect();
+
+    let length = lft.len() + 1;
+    let mut checks = vec![];
+
+    for i in 1..length {
+        let mut check = String::from("");
+        for y in 0..i {
+            check += &lft[y];
+            if y + 1 != i {
+                check += "/";
+            }
+        }
+
+        checks.push(check);
+    }
+
+    checks
 }
 
 /// Saves a file to the expected location
@@ -95,4 +138,24 @@ pub fn get_save_path(uri: &str) -> String {
     }
 
     path
+}
+
+mod test {
+    use crate::builder::storage::get_folders_to_check;
+
+    #[test]
+    fn get_folders_to_check_should_return_correct_result() {
+        let input = "./db/api/asdf-service/user/micmine";
+
+        let expected = vec![
+            ".",
+            "./db",
+            "./db/api",
+            "./db/api/asdf-service",
+            "./db/api/asdf-service/user",
+            "./db/api/asdf-service/user/micmine",
+        ];
+
+        assert_eq!(get_folders_to_check(input), expected);
+    }
 }

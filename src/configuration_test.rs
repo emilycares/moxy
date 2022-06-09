@@ -19,7 +19,7 @@ fn static_route() {
 }
 
 #[test]
-fn configuration_has_route_should_find_no_route() {
+fn configuration_get_route_should_find_no_route() {
     let configuration = Configuration {
         routes: vec![
             Route {
@@ -43,11 +43,11 @@ fn configuration_has_route_should_find_no_route() {
         build_mode: None,
     };
 
-    assert!(!configuration.has_route("/abc", RouteMethod::GET));
+    assert!(!configuration.get_route("/abc", RouteMethod::GET).is_some());
 }
 
 #[test]
-fn configuration_has_route_should_find_route() {
+fn configuration_get_route_should_find_route() {
     let configuration = Configuration {
         routes: vec![
             Route {
@@ -71,9 +71,9 @@ fn configuration_has_route_should_find_route() {
         build_mode: None,
     };
 
-    assert!(configuration.has_route("/a", RouteMethod::GET));
-    assert!(configuration.has_route("/b", RouteMethod::GET));
-    assert!(configuration.has_route("/c", RouteMethod::GET));
+    assert!(configuration.get_route("/a", RouteMethod::GET).is_some());
+    assert!(configuration.get_route("/b", RouteMethod::GET).is_some());
+    assert!(configuration.get_route("/c", RouteMethod::GET).is_some());
 }
 
 #[test]

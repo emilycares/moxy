@@ -113,13 +113,23 @@ pub struct Configuration {
 
 impl Configuration {
     /// Checks if there is an existing route based on the path and method
-    pub fn has_route(&self, path: &str, method: RouteMethod) -> bool {
+    pub fn get_route(&self, path: &str, method: RouteMethod) -> Option<&Route> {
         let matching_routes = self
             .routes
             .iter()
             .find(|c| c.path.as_str() == path && c.method == method);
 
-        matching_routes.is_some()
+        matching_routes
+    }
+    
+    /// Checks if there is an existing route based on the path and method
+    pub fn get_route_mut(&self, path: &str, method: RouteMethod) -> Option<&mut Route> {
+        let matching_routes = self
+            .routes
+            .iter_mut()
+            .find(|c| c.path.as_str() == path && c.method == method);
+
+        matching_routes
     }
 }
 
