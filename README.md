@@ -3,6 +3,12 @@ A proxy for developers. That can be used for frontend and backend.
 
 Its main use case it to cache HTTP requests.
 
+## Get Started
+1. Build
+2. Copy executable to some directory
+3. Start and stop it
+4. Change the remote in moxy.json
+
 ## Usecase
 You want to call and API that does not exist or is currently changing, and you 
 are the person that needs to integrate this new/changed API in your software.
@@ -14,9 +20,7 @@ change the response. Or add a route in the moxy.json to test your app, like it
 was the real backend behind it.
 
 ## Supported platforms
-It is working on Linux and Windows 10. If you are running another operating 
-system just try to run it. It will probably work. These are just the platforms
-that were tested.
+It is tested on Linux and Windows 10.
 
 ## Build from source
 Install rust from https://www.rust-lang.org/.
