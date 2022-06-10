@@ -113,31 +113,31 @@ pub struct Configuration {
 
 impl Configuration {
     /// Checks if there is an existing route based on the path and method
-    pub fn get_route(&self, path: &str, method: RouteMethod) -> Option<&Route> {
+    pub fn get_route(&self, path: &str, method: &RouteMethod) -> Option<&Route> {
         let matching_routes = self
             .routes
             .iter()
-            .find(|c| c.path.as_str() == path && c.method == method);
+            .find(|c| c.path.as_str() == path && &c.method == method);
 
         matching_routes
     }
     
     /// Checks if there is an existing route based on the resource and method
-    pub fn get_route_by_resource_mut(&mut self, resource: &str, method: RouteMethod) -> Option<&mut Route> {
+    pub fn get_route_by_resource_mut(&mut self, resource: &str, method: &RouteMethod) -> Option<&mut Route> {
         let matching_routes = self
             .routes
             .iter_mut()
-            .find(|c| c.resource.as_str() == resource && c.method == method);
+            .find(|c| c.resource.as_str() == resource && &c.method == method);
 
         matching_routes
     }
     
     /// Checks if there is an existing route based on the path and method
-    pub fn get_route_by_path_mut(&mut self, path: &str, method: RouteMethod) -> Option<&mut Route> {
+    pub fn get_route_by_path_mut(&mut self, path: &str, method: &RouteMethod) -> Option<&mut Route> {
         let matching_routes = self
             .routes
             .iter_mut()
-            .find(|c| c.path.as_str() == path && c.method == method);
+            .find(|c| c.path.as_str() == path && &c.method == method);
 
         matching_routes
     }
@@ -173,7 +173,7 @@ pub async fn get_configuration() -> Configuration {
 pub fn get_route<'a>(
     routes: &'a [Route],
     uri: &'a Uri,
-    method: RouteMethod,
+    method: &RouteMethod,
 ) -> (Option<&'a Route>, Option<&'a str>) {
     for i in routes.iter() {
         if i.method.eq(&method) {

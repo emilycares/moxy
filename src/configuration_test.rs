@@ -12,7 +12,7 @@ fn static_route() {
         resource: "db/api/test.json".to_string(),
     }];
     let url = &"http://localhost:8080/api/test".parse::<Uri>().unwrap();
-    let (result, parameter) = get_route(&routes, &url, RouteMethod::GET);
+    let (result, parameter) = get_route(&routes, &url, &RouteMethod::GET);
 
     assert_eq!(result.unwrap().resource, routes[0].resource);
     assert_eq!(parameter, None);
@@ -43,7 +43,7 @@ fn configuration_get_route_should_find_no_route() {
         build_mode: None,
     };
 
-    assert!(!configuration.get_route("/abc", RouteMethod::GET).is_some());
+    assert!(!configuration.get_route("/abc", &RouteMethod::GET).is_some());
 }
 
 #[test]
@@ -71,9 +71,9 @@ fn configuration_get_route_should_find_route() {
         build_mode: None,
     };
 
-    assert!(configuration.get_route("/a", RouteMethod::GET).is_some());
-    assert!(configuration.get_route("/b", RouteMethod::GET).is_some());
-    assert!(configuration.get_route("/c", RouteMethod::GET).is_some());
+    assert!(configuration.get_route("/a", &RouteMethod::GET).is_some());
+    assert!(configuration.get_route("/b", &RouteMethod::GET).is_some());
+    assert!(configuration.get_route("/c", &RouteMethod::GET).is_some());
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn dynamic_route_with_different_start() {
             &"http://localhost:8080/api/test/1/abc.json"
                 .parse::<Uri>()
                 .unwrap(),
-            RouteMethod::GET
+            &RouteMethod::GET
         )
         .0
         .unwrap()
@@ -115,7 +115,7 @@ fn dynamic_route_with_different_start() {
             &"http://localhost:8080/api/test/2/abc.json"
                 .parse::<Uri>()
                 .unwrap(),
-            RouteMethod::GET
+            &RouteMethod::GET
         )
         .0
         .unwrap()
@@ -128,7 +128,7 @@ fn dynamic_route_with_different_start() {
             &"http://localhost:8080/api/test/3/abc.json"
                 .parse::<Uri>()
                 .unwrap(),
-            RouteMethod::GET
+            &RouteMethod::GET
         )
         .0
         .unwrap()
@@ -158,7 +158,7 @@ fn dynamic_route_with_different_end() {
             &"http://localhost:8080/api/test/abc.txt"
                 .parse::<Uri>()
                 .unwrap(),
-            RouteMethod::GET
+            &RouteMethod::GET
         )
         .0
         .unwrap()
@@ -171,7 +171,7 @@ fn dynamic_route_with_different_end() {
             &"http://localhost:8080/api/test/abc.json"
                 .parse::<Uri>()
                 .unwrap(),
-            RouteMethod::GET
+            &RouteMethod::GET
         )
         .0
         .unwrap()
@@ -192,7 +192,7 @@ fn dynamic_paramerter_end() {
         get_route(
             &routes,
             &"http://localhost:8080/api/test/abc".parse::<Uri>().unwrap(),
-            RouteMethod::GET
+            &RouteMethod::GET
         )
         .1
         .unwrap(),
@@ -214,7 +214,7 @@ fn dynamic_paramerter_middle() {
             &"http://localhost:8080/api/test/abc.txt"
                 .parse::<Uri>()
                 .unwrap(),
-            RouteMethod::GET
+            &RouteMethod::GET
         )
         .1
         .unwrap(),

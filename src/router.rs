@@ -19,7 +19,7 @@ pub async fn endpoint(
     let configc = config_a.clone();
     let config = configc.lock().await.to_owned();
     let (route, parameter) =
-        configuration::get_route(&config.routes, req.uri(), RouteMethod::from(req.method()));
+        configuration::get_route(&config.routes, req.uri(), &RouteMethod::from(req.method()));
 
     if let Some(route) = route {
         let data = data_loader::load(route, parameter);

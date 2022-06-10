@@ -43,7 +43,7 @@ fn get_route_should_not_find_entry_if_the_url_only_partialy_matches() {
 
     let uri = Uri::from_static("/a/test");
 
-    let result = get_route(&routes, &uri, RouteMethod::GET);
+    let result = get_route(&routes, &uri, &RouteMethod::GET);
 
     assert_eq!(result, (None, None));
 }

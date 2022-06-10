@@ -17,7 +17,7 @@ pub async fn save(
 ) -> Result<(), std::io::Error> {
     let path = get_save_path(uri);
     let mut config = config.lock().await;
-    if config.get_route(&path, method.clone()).is_none() {
+    if config.get_route(&path, &method).is_none() {
         let route = Route {
             method: method.clone(),
             resource: path.clone(),
@@ -36,14 +36,15 @@ pub async fn save(
         match check_existing_file(folders.as_str()).await {
             Ok(resource_changes) => {
                 for (from, to) in resource_changes {
-                    if let Some(route) = config.get_route_by_resource_mut(&from.to_owned(), method.clone()) {
+                    if let Some(route) = config.get_route_by_resource_mut(&from.to_owned(), &method)
+                    {
                         route.resource = to;
                     }
                 }
             }
             Err(e) => return Err(e),
         }
-        save_file(path.as_str(), body).await?;
+        save_file(path.as_str(), body, folders.as_str()).await?;
         configuration::save_configuration(config.to_owned()).await?;
     }
 
@@ -78,7 +79,7 @@ async fn check_existing_file(folders: &str) -> Result<Vec<(String, String)>, std
                 if let Some(c) = c {
                     path_changes.push((f.clone(), c))
                 }
-            },
+            }
             Err(e) => return Err(e),
         }
     }
@@ -104,7 +105,6 @@ async fn folder_check(folder: String) -> Result<Option<String>, std::io::Error> 
 }
 
 fn get_folders_to_check(folders: &str) -> Vec<String> {
-    
     let lft: Vec<&str> = folders.split('/').collect();
 
     let length = lft.len() + 1;
@@ -126,7 +126,8 @@ fn get_folders_to_check(folders: &str) -> Vec<String> {
 }
 
 /// Saves a file to the expected location
-async fn save_file(location: &str, body: Vec<u8>) -> Result<(), std::io::Error> {
+async fn save_file(location: &str, body: Vec<u8>, folder: &str) -> Result<(), std::io::Error> {
+    fs::create_dir_all(&folder).await?;
     let mut file = File::create(location).await?;
     file.write_all(&body).await?;
 
@@ -146,7 +147,6 @@ pub fn get_save_path(uri: &str) -> String {
 
 mod test {
     use crate::builder::storage::get_folders_to_check;
-
 
     #[test]
     fn get_folders_to_check_should_return_correct_result_1() {
@@ -168,11 +168,7 @@ mod test {
     fn get_folders_to_check_should_return_correct_result_2() {
         let input = "./db/a";
 
-        let expected = vec![
-            ".",
-            "./db",
-            "./db/a",
-        ];
+        let expected = vec![".", "./db", "./db/a"];
 
         assert_eq!(get_folders_to_check(input), expected);
     }
