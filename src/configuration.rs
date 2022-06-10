@@ -122,8 +122,18 @@ impl Configuration {
         matching_routes
     }
     
+    /// Checks if there is an existing route based on the resource and method
+    pub fn get_route_by_resource_mut(&mut self, resource: &str, method: RouteMethod) -> Option<&mut Route> {
+        let matching_routes = self
+            .routes
+            .iter_mut()
+            .find(|c| c.resource.as_str() == resource && c.method == method);
+
+        matching_routes
+    }
+    
     /// Checks if there is an existing route based on the path and method
-    pub fn get_route_mut(&self, path: &str, method: RouteMethod) -> Option<&mut Route> {
+    pub fn get_route_by_path_mut(&mut self, path: &str, method: RouteMethod) -> Option<&mut Route> {
         let matching_routes = self
             .routes
             .iter_mut()

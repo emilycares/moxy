@@ -34,9 +34,11 @@ pub async fn save(
         };
 
         match check_existing_file(folders.as_str()).await {
-            Ok(path_changes) => {
-                for (from, to) in path_changes {
-                    if let Some(route) = config.get_route_mut(&from.to_owned(), method.clone()) {}
+            Ok(resource_changes) => {
+                for (from, to) in resource_changes {
+                    if let Some(route) = config.get_route_by_resource_mut(&from.to_owned(), method.clone()) {
+                        route.resource = to;
+                    }
                 }
             }
             Err(e) => return Err(e),
@@ -68,14 +70,15 @@ pub async fn save(
 /// In order to create the file micmine we need to create the folders and need to move awaiy
 /// any existing files that colide with the folder path.
 async fn check_existing_file(folders: &str) -> Result<Vec<(String, String)>, std::io::Error> {
-    // Remove file if there was one
-    log::trace!("{:?}", folders);
-
-    let path_changes = vec![];
+    let mut path_changes = vec![];
 
     for f in get_folders_to_check(folders) {
-        match folder_check(f).await {
-            Ok(c) => path_changes.push((f, c)),
+        match folder_check(f.clone()).await {
+            Ok(c) => {
+                if let Some(c) = c {
+                    path_changes.push((f.clone(), c))
+                }
+            },
             Err(e) => return Err(e),
         }
     }
@@ -101,6 +104,7 @@ async fn folder_check(folder: String) -> Result<Option<String>, std::io::Error> 
 }
 
 fn get_folders_to_check(folders: &str) -> Vec<String> {
+    
     let lft: Vec<&str> = folders.split('/').collect();
 
     let length = lft.len() + 1;
@@ -143,8 +147,9 @@ pub fn get_save_path(uri: &str) -> String {
 mod test {
     use crate::builder::storage::get_folders_to_check;
 
+
     #[test]
-    fn get_folders_to_check_should_return_correct_result() {
+    fn get_folders_to_check_should_return_correct_result_1() {
         let input = "./db/api/asdf-service/user/micmine";
 
         let expected = vec![
@@ -154,6 +159,19 @@ mod test {
             "./db/api/asdf-service",
             "./db/api/asdf-service/user",
             "./db/api/asdf-service/user/micmine",
+        ];
+
+        assert_eq!(get_folders_to_check(input), expected);
+    }
+
+    #[test]
+    fn get_folders_to_check_should_return_correct_result_2() {
+        let input = "./db/a";
+
+        let expected = vec![
+            ".",
+            "./db",
+            "./db/a",
         ];
 
         assert_eq!(get_folders_to_check(input), expected);
