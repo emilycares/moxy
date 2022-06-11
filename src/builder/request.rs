@@ -57,7 +57,7 @@ pub async fn fetch_request(
     header: HashMap<String, String>,
 ) -> Option<ResourceData> {
     let client = reqwest::Client::new();
-    let mut req = client.request(method.clone().into(), url);
+    let mut req = client.request(method.to_owned().into(), url);
 
     req = req.headers(hash_map_to_header_map(header));
 

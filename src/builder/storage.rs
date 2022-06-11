@@ -74,10 +74,10 @@ async fn check_existing_file(folders: &str) -> Result<Vec<(String, String)>, std
     let mut path_changes = vec![];
 
     for f in get_folders_to_check(folders) {
-        match folder_check(f.clone()).await {
+        match folder_check(&f).await {
             Ok(c) => {
                 if let Some(c) = c {
-                    path_changes.push((f.clone(), c))
+                    path_changes.push((f, c))
                 }
             }
             Err(e) => return Err(e),
@@ -87,7 +87,7 @@ async fn check_existing_file(folders: &str) -> Result<Vec<(String, String)>, std
     Ok(path_changes)
 }
 
-async fn folder_check(folder: String) -> Result<Option<String>, std::io::Error> {
+async fn folder_check(folder: &String) -> Result<Option<String>, std::io::Error> {
     if Path::new(&folder).is_file() {
         let prefious_file = Some(fs::read(&folder).await);
         fs::remove_file(&folder).await?;
@@ -145,8 +145,10 @@ pub fn get_save_path(uri: &str) -> String {
     path
 }
 
-mod test {
+#[cfg(test)]
+mod tests {
     use crate::builder::storage::get_folders_to_check;
+
 
     #[test]
     fn get_folders_to_check_should_return_correct_result_1() {
