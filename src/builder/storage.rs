@@ -147,7 +147,7 @@ pub fn get_save_path(uri: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::builder::storage::get_folders_to_check;
+    use crate::builder::storage::{get_folders_to_check, get_save_path};
 
 
     #[test]
@@ -173,5 +173,21 @@ mod tests {
         let expected = vec![".", "./db", "./db/a"];
 
         assert_eq!(get_folders_to_check(input), expected);
+    }
+
+    #[test]
+    fn get_save_path_add_db_folder() {
+        let input = "/api/some-service/micmine";
+        let expected = "./db/api/some-service/micmine";
+
+        assert_eq!(get_save_path(input), expected);
+    }
+
+    #[test]
+    fn get_save_path_add_index_for_folder() {
+        let input = "/api/some-service/micmine/";
+        let expected = "./db/api/some-service/micmine/index";
+
+        assert_eq!(get_save_path(input), expected);
     }
 }
