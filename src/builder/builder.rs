@@ -29,7 +29,7 @@ pub async fn build_response(
 ) -> Result<Response<Body>, Infallible> {
     let config_b = config_a.clone();
     let config = config_b.lock().await.to_owned();
-    if let Some(build_mode) = &config.build_mode {
+    if let Some(build_mode) = &config.build_mode { 
         if let Some(remote) = &config.remote {
             let response = request::fetch_request(
                 RouteMethod::from(req.method().clone()),
@@ -42,24 +42,21 @@ pub async fn build_response(
             match response {
                 Some(response) => {
                     if let Some(body) = response.payload {
-                        let client_response = Response::builder()
-                            .status(response.code)
-                            .body(Body::from(body.clone()))
-                            .unwrap();
-
                         if response.code != 404 && build_mode == &BuildMode::Write {
-                            storage::save(response.method, req.uri().path(), body, config_a)
-                                .await
-                                .unwrap()
+                            storage::save(
+                                &response.method,
+                                req.uri().path(),
+                                body.clone(),
+                                &response.headers,
+                                config_a,
+                            )
+                            .await
+                            .unwrap()
                         }
 
-                        Ok(client_response)
+                        get_response(response.headers, response.code, Body::from(body))
                     } else {
-                        let response = Response::builder()
-                            .status(response.code)
-                            .body(Body::empty())
-                            .unwrap();
-                        Ok(response)
+                        get_response(response.headers, response.code, Body::empty())
                     }
                 }
                 None => {
@@ -80,6 +77,16 @@ pub async fn build_response(
     }
 }
 
+pub fn get_response(headers: HashMap<String, String>, code: u16, body: Body) -> Result<Response<Body>, Infallible> {
+    let mut response = Response::builder().status(code);
+
+    for (key, value) in headers.into_iter() {
+        response = response.header(key, value);
+    }
+
+    Ok(response.body(body).unwrap())
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -87,7 +94,7 @@ mod tests {
     use hyper::Uri;
 
     use crate::{
-        builder::{request, storage::get_save_path},
+        builder::request,
         configuration::{get_route, Route, RouteMethod},
     };
 
@@ -101,20 +108,6 @@ mod tests {
         )
         .await
         .unwrap();
-    }
-
-    #[test]
-    fn get_save_path_should_start_with_db() {
-        let path = get_save_path("/index.html");
-
-        assert!(&path.starts_with("./db"));
-    }
-
-    #[test]
-    fn get_save_path_should_add_index_if_folder() {
-        let path = get_save_path("/");
-
-        assert!(&path.ends_with("/index"));
     }
 
     #[test]
