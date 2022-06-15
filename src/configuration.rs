@@ -73,9 +73,9 @@ impl From<&Method> for RouteMethod {
     }
 }
 
-impl Into<Method> for RouteMethod {
-    fn into(self) -> Method {
-        match self {
+impl From<RouteMethod> for Method {
+    fn from(route_method: RouteMethod) -> Self {
+        match route_method {
             RouteMethod::GET => Method::GET,
             RouteMethod::HEAD => Method::HEAD,
             RouteMethod::POST => Method::POST,

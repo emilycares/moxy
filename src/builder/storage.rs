@@ -15,7 +15,7 @@ pub async fn save(
     body: Vec<u8>,
     headers: &HashMap<String, String>,
     config: Arc<Mutex<Configuration>>,
-) -> Result<(), std::io::Error> {
+    ) -> Result<(), std::io::Error> {
     let path = get_save_path(uri, headers);
     let mut config = config.lock().await;
     if config.get_route(&path, &method).is_none() {
@@ -162,10 +162,11 @@ fn get_extension(content_type: Option<&String>) -> &str {
         } else {
             content_type
         };
-        log::trace!("{content_type}");
 
         match content_type {
             "application/json" => ".json",
+            "application/javascript" => ".js",
+            "text/css" => ".css",
             // xml
             "text/xml" => ".xml",
             "application/xml" => ".xml",
@@ -175,7 +176,14 @@ fn get_extension(content_type: Option<&String>) -> &str {
             "text/plain" => ".txt",
             // image
             "image/x-icon" => ".ico",
-            _ => ".txt",
+            "image/png" => ".png",
+            "image/gif" => ".gif",
+            // sound
+            "application/octet-stream" => ".avif",
+            _ => {
+                log::trace!("Unknown content-type: {}", content_type);
+                return ".txt";
+            },
         }
     } else {
         return ".txt";
@@ -187,6 +195,8 @@ pub fn get_content_type(file_name: &str) -> &str {
     if let Some(extension) = extension {
         match extension {
             "json" => "application/json",
+            "js" => "application/javascript",
+            "css" => "text/css",
             // xml
             "xml" => "application/xml",
             "svg" => "image/svg+xml",
@@ -195,6 +205,10 @@ pub fn get_content_type(file_name: &str) -> &str {
             "txt" => "text/plain",
             // image
             "ico" => "image/x-icon",
+            "png" => "image/png",
+            "gif" => "image/gif",
+            // sound
+            "avif" => "application/octet-stream",
             _ => "text",
         }
     } else {
