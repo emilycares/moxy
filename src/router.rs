@@ -58,7 +58,7 @@ async fn endpoint(
 ) -> Result<Response<Body>, Infallible> {
     log::info!("{}", req.uri());
     let configc = config_a.clone();
-    let config = configc.lock().await.to_owned();
+    let mut config = configc.lock().await.to_owned();
     let (route, parameter) =
         configuration::get_route(&config.routes, req.uri(), &RouteMethod::from(req.method()));
 
@@ -73,9 +73,11 @@ async fn endpoint(
 
             Ok(response)
         } else {
-            log::error!("Resource not found and Requested file was not found on file system");
-            let response = Response::builder().status(404).body(Body::empty()).unwrap();
-            Ok(response)
+            if let Some(x) = config.routes.iter().position(|c| c == route) {
+                config.routes.remove(x);
+            }
+
+            builder::builder::build_response(config_a, req).await
         }
     } else {
         builder::builder::build_response(config_a, req).await
@@ -97,7 +99,7 @@ async fn check_ws(
 
             // Return the response so the spawned future can continue.
             Ok(response)
-        } else { 
+        } else {
             log::error!("Unable to upgrade connection");
             let response = Response::builder().status(404).body(Body::empty()).unwrap();
             Ok(response)
