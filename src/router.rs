@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     builder::{self, storage},
-    configuration::{self, Configuration, RouteMethod},
+    configuration::{self, BuildMode, Configuration, RouteMethod},
     data_loader,
 };
 
@@ -74,13 +74,26 @@ async fn endpoint(
             Ok(response)
         } else {
             if let Some(x) = config.routes.iter().position(|c| c == route) {
+                log::info!("Remove route because the file does not exist: {:?}", route);
                 config.routes.remove(x);
             }
 
-            builder::builder::build_response(config_a, req).await
+            if config.build_mode == Some(BuildMode::Write) {
+                builder::builder::build_response(config_a, req).await
+            } else {
+                log::error!("Will build new route for missing file");
+                let response = Response::builder().status(404).body(Body::empty()).unwrap();
+                Ok(response)
+            }
         }
     } else {
-        builder::builder::build_response(config_a, req).await
+        if config.build_mode == Some(BuildMode::Write) {
+            builder::builder::build_response(config_a, req).await
+        } else {
+            log::info!("Resource not found and build mode disabled");
+            let response = Response::builder().status(404).body(Body::empty()).unwrap();
+            Ok(response)
+        }
     }
 }
 
