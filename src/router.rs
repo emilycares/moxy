@@ -127,24 +127,6 @@ async fn endpoint_ws(websocket: HyperWebsocket) -> Result<(), Error> {
     let mut websocket = websocket.await?;
 
     websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
-    websocket.send(Message::text("asdasd")).await?;
     log::trace!("[WS] sent some messages");
     while let Some(message) = websocket.next().await {
         match message? {

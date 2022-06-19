@@ -23,6 +23,7 @@ pub async fn save(
             method: method.clone(),
             resource: path.clone(),
             path: uri.to_owned(),
+            messages: Vec::new()
         };
         log::info!("Save route: {:?}", route);
 
@@ -151,6 +152,7 @@ pub fn get_save_path(uri: &str, headers: &HashMap<String, String>) -> String {
     path
 }
 
+/// convert content_type to filetype
 fn get_extension(content_type: Option<&String>) -> &str {
     if let Some(content_type) = content_type {
         let content_type = if content_type.contains(";") {
@@ -190,6 +192,7 @@ fn get_extension(content_type: Option<&String>) -> &str {
     }
 }
 
+/// convert filetype to content_type 
 pub fn get_content_type(file_name: &str) -> &str {
     let extension = file_name.rsplit('.').next();
     if let Some(extension) = extension {

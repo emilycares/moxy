@@ -31,9 +31,9 @@ pub async fn build_response(
     let config = config_b.lock().await.to_owned();
     if let Some(build_mode) = &config.build_mode { 
         if let Some(remote) = &config.remote {
-            let response = request::fetch_request(
+            let response = request::http::fetch_http(
                 RouteMethod::from(req.method().clone()),
-                request::get_url(req.uri(), remote),
+                request::util::get_url(req.uri(), remote),
                 None,
                 HashMap::new(),
             )
@@ -77,6 +77,7 @@ pub async fn build_response(
     }
 }
 
+/// Returns a respinse with headers and a code
 pub fn get_response(headers: HashMap<String, String>, code: u16, body: Body) -> Result<Response<Body>, Infallible> {
     let mut response = Response::builder().status(code);
 
@@ -100,7 +101,7 @@ mod tests {
 
     #[tokio::test]
     async fn requrest_no_body() {
-        let _reponse = request::fetch_request(
+        let _reponse = request::http::fetch_http(
             RouteMethod::GET,
             "http://example.com".to_string(),
             None,
@@ -116,6 +117,7 @@ mod tests {
             method: RouteMethod::GET,
             path: "/a".to_string(),
             resource: "".to_string(),
+            messages: Vec::new()
         }];
 
         let uri = Uri::from_static("/a/test");

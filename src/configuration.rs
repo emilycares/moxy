@@ -17,6 +17,109 @@ pub struct Route {
     pub path: String,
     /// File storeage location
     pub resource: String,
+    /// Data for WS
+    pub messages: Vec<WsMessage>,
+}
+
+/// A WS message with controll when it has to be sent
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct WsMessage {
+    pub kind: WsMessageType,
+    /// This will be contveted to WsMessageTime
+    pub time: String,
+    /// File storeage location
+    pub location: String,
+}
+
+impl WsMessage {
+    /// get parsed WsMessageTime
+    pub fn get_time(&self) -> Option<WsMessageTime> {
+        if let Ok(time) = self.time.parse::<WsMessageTime>() {
+            return Some(time);
+        }
+
+        None
+    }
+}
+
+/// Time units
+#[derive(Debug, PartialEq)]
+pub enum WsMessageTime {
+    /// 5s
+    Second(usize),
+    /// 5m
+    Minute(usize),
+    /// 5h
+    Hour(usize),
+    /// 5sent ;After x messages sent messages
+    Sent(usize),
+    /// 5recived ;After x messages recived messages
+    Recived(usize),
+}
+
+impl FromStr for WsMessageTime {
+    type Err = u8;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.ends_with('s') {
+            let padding = 1;
+            if let Ok(number) = parse_time_number(s, padding) {
+                return Ok(Self::Second(number));
+            }
+        } else if s.ends_with('m') {
+            let padding = 1;
+            if let Ok(number) = parse_time_number(s, padding) {
+                return Ok(Self::Minute(number));
+            }
+        } else if s.ends_with('h') {
+            let padding = 1;
+            if let Ok(number) = parse_time_number(s, padding) {
+                return Ok(Self::Hour(number));
+            }
+        } else if s.ends_with("sent") {
+            let padding = 4;
+            if let Ok(number) = parse_time_number(s, padding) {
+                return Ok(Self::Sent(number));
+            }
+        } else if s.ends_with("recived") {
+            let padding = 7;
+            if let Ok(number) = parse_time_number(s, padding) {
+                return Ok(Self::Recived(number));
+            }
+        }
+
+        Err(1)
+    }
+}
+
+/// This will take the number infront of a string
+///
+/// # Exaples
+/// ```
+/// let input = "3sent";
+///
+/// assert_eq!(parse_time_number(input, 3), 3);
+/// ```
+fn parse_time_number(number: &str, padding: usize) -> Result<usize, u8> {
+    let padding = number.len() - padding;
+    if let Some(number) = number.get(0..padding) {
+        if let Ok(number) = number.parse::<usize>() {
+            return Ok(number);
+        } else {
+            log::error!("Time is invalid format. Unable to parse number: {number}");
+            return Err(2);
+        }
+    } else {
+        log::error!("Time is invalid format. (To short)");
+        Err(1)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum WsMessageType {
+    Startup,
+    After,
+    Every,
 }
 
 /// This represents the http method that is used.
@@ -40,6 +143,8 @@ pub enum RouteMethod {
     TRACE,
     /// HTTP PATCH
     PATCH,
+    /// Websocket
+    WS,
 }
 
 impl FromStr for RouteMethod {
@@ -56,6 +161,7 @@ impl FromStr for RouteMethod {
             "OPTIONS" => Ok(Self::OPTIONS),
             "TRACE" => Ok(Self::TRACE),
             "PATCH" => Ok(Self::PATCH),
+            "WS" => Ok(Self::WS),
             _ => Err(1),
         }
     }
@@ -85,6 +191,7 @@ impl From<RouteMethod> for Method {
             RouteMethod::OPTIONS => Method::OPTIONS,
             RouteMethod::TRACE => Method::TRACE,
             RouteMethod::PATCH => Method::PATCH,
+            RouteMethod::WS => unreachable!(),
         }
     }
 }
@@ -259,7 +366,7 @@ pub async fn save_configuration(configuration: Configuration) -> Result<(), std:
 mod tests {
     use hyper::Uri;
 
-    use crate::configuration::{get_route, Route, RouteMethod};
+    use crate::configuration::{get_route, Route, RouteMethod, WsMessageTime};
 
     use super::Configuration;
 
@@ -269,6 +376,7 @@ mod tests {
             method: RouteMethod::GET,
             path: "/api/test".to_string(),
             resource: "db/api/test.json".to_string(),
+            messages: Vec::new(),
         }];
         let url = &"http://localhost:8080/api/test".parse::<Uri>().unwrap();
         let (result, parameter) = get_route(&routes, &url, &RouteMethod::GET);
@@ -285,16 +393,19 @@ mod tests {
                     method: RouteMethod::GET,
                     path: "/a".to_string(),
                     resource: "somefile.txt".to_string(),
+                    messages: Vec::new(),
                 },
                 Route {
                     method: RouteMethod::GET,
                     path: "/b".to_string(),
                     resource: "somefile.txt".to_string(),
+                    messages: Vec::new(),
                 },
                 Route {
                     method: RouteMethod::GET,
                     path: "/c".to_string(),
                     resource: "somefile.txt".to_string(),
+                    messages: Vec::new(),
                 },
             ],
             host: None,
@@ -313,16 +424,19 @@ mod tests {
                     method: RouteMethod::GET,
                     path: "/a".to_string(),
                     resource: "somefile.txt".to_string(),
+                    messages: Vec::new(),
                 },
                 Route {
                     method: RouteMethod::GET,
                     path: "/b".to_string(),
                     resource: "somefile.txt".to_string(),
+                    messages: Vec::new(),
                 },
                 Route {
                     method: RouteMethod::GET,
                     path: "/c".to_string(),
                     resource: "somefile.txt".to_string(),
+                    messages: Vec::new(),
                 },
             ],
             host: None,
@@ -342,16 +456,19 @@ mod tests {
                 method: RouteMethod::GET,
                 path: "/api/test/1/$$$.json".to_string(),
                 resource: "db/api/1/$$$.json".to_string(),
+                messages: Vec::new(),
             },
             Route {
                 method: RouteMethod::GET,
                 path: "/api/test/2/$$$.json".to_string(),
                 resource: "db/api/2/$$$.json".to_string(),
+                messages: Vec::new(),
             },
             Route {
                 method: RouteMethod::GET,
                 path: "/api/test/3/$$$.json".to_string(),
                 resource: "db/api/3/$$$.json".to_string(),
+                messages: Vec::new(),
             },
         ];
 
@@ -403,11 +520,13 @@ mod tests {
                 method: RouteMethod::GET,
                 path: "/api/test/$$$.txt".to_string(),
                 resource: "db/api/$$$.txt".to_string(),
+                messages: Vec::new(),
             },
             Route {
                 method: RouteMethod::GET,
                 path: "/api/test/$$$.json".to_string(),
                 resource: "db/api/$$$.json".to_string(),
+                messages: Vec::new(),
             },
         ];
 
@@ -445,6 +564,7 @@ mod tests {
             method: RouteMethod::GET,
             path: "/api/test/$$$".to_string(),
             resource: "db/api/$$$".to_string(),
+            messages: Vec::new(),
         }];
 
         assert_eq!(
@@ -465,6 +585,7 @@ mod tests {
             method: RouteMethod::GET,
             path: "/api/test/$$$.txt".to_string(),
             resource: "db/api/$$$.txt".to_string(),
+            messages: Vec::new(),
         }];
 
         assert_eq!(
@@ -478,6 +599,30 @@ mod tests {
             .1
             .unwrap(),
             "abc"
+        );
+    }
+
+    #[test]
+    fn parse_ws_message_time() {
+        assert_eq!(
+            "3s".parse::<WsMessageTime>().unwrap(),
+            WsMessageTime::Second(3)
+        );
+        assert_eq!(
+            "3m".parse::<WsMessageTime>().unwrap(),
+            WsMessageTime::Minute(3)
+        );
+        assert_eq!(
+            "3h".parse::<WsMessageTime>().unwrap(),
+            WsMessageTime::Hour(3)
+        );
+        assert_eq!(
+            "3sent".parse::<WsMessageTime>().unwrap(),
+            WsMessageTime::Sent(3)
+        );
+        assert_eq!(
+            "3recived".parse::<WsMessageTime>().unwrap(),
+            WsMessageTime::Recived(3)
         );
     }
 }
