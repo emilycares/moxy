@@ -1,6 +1,7 @@
 //! Returns a respomse to a given request.
 use futures_util::sink::SinkExt;
 use futures_util::StreamExt;
+use rayon::prelude::*;
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 
 use hyper::{
@@ -12,7 +13,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     builder::{self, storage},
-    configuration::{self, BuildMode, Configuration, RouteMethod},
+    configuration::{self, BuildMode, Configuration, RouteMethod, WsMessageType},
     data_loader,
 };
 
@@ -105,7 +106,7 @@ async fn check_ws(
         if let Ok((response, websocket)) = hyper_tungstenite::upgrade(request, None) {
             // Spawn a task to handle the websocket connection.
             tokio::spawn(async move {
-                if let Err(e) = endpoint_ws(websocket).await {
+                if let Err(e) = endpoint_ws(request, websocket, config).await {
                     log::trace!("[WS] Error in websocket connection: {}", e);
                 }
             });
@@ -123,45 +124,65 @@ async fn check_ws(
 }
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
-async fn endpoint_ws(websocket: HyperWebsocket) -> Result<(), Error> {
-    let mut websocket = websocket.await?;
+async fn endpoint_ws(
+    reqwest: Request<Body>,
+    websocket: HyperWebsocket,
+    config: Arc<Mutex<Configuration>>,
+) -> Result<(), Error> {
+    let mut config = config.lock().await.to_owned();
+    if let (Some(route), parameter) =
+        configuration::get_route(&config.routes, reqwest.uri(), &RouteMethod::WS)
+    {
+        let mut websocket = websocket.await?;
 
-    websocket.send(Message::text("asdasd")).await?;
-    log::trace!("[WS] sent some messages");
-    while let Some(message) = websocket.next().await {
-        match message? {
-            Message::Text(msg) => {
-                log::trace!("[WS] Received text message: {}", msg);
-                websocket
-                    .send(Message::text("Thank you, come again."))
-                    .await?;
+        for c in route
+            .messages
+            .par_iter()
+            .filter(|c| c.kind == WsMessageType::Startup)
+            .map(|c| data_loader::file(c.location.as_str()))
+            .collect()
+        {
+            if let Ok(c) = c {
+                websocket.send(Message::binary(c)).await
             }
-            Message::Binary(msg) => {
-                log::trace!("[WS] Received binary message: {:02X?}", msg);
-                websocket
-                    .send(Message::binary(b"Thank you, come again.".to_vec()))
-                    .await?;
-            }
-            Message::Ping(msg) => {
-                // No need to send a reply: tungstenite takes care of this for you.
-                log::trace!("[WS] Received ping message: {:02X?}", msg);
-            }
-            Message::Pong(msg) => {
-                log::trace!("[WS] Received pong message: {:02X?}", msg);
-            }
-            Message::Close(msg) => {
-                // No need to send a reply: tungstenite takes care of this for you.
-                if let Some(msg) = &msg {
-                    println!(
-                        "Received close message with code {} and message: {}",
-                        msg.code, msg.reason
-                    );
-                } else {
-                    log::trace!("[WS] Received close message");
+        }
+
+        log::trace!("[WS] sent some messages");
+        while let Some(message) = websocket.next().await {
+            match message? {
+                Message::Text(msg) => {
+                    log::trace!("[WS] Received text message: {}", msg);
+                    websocket
+                        .send(Message::text("Thank you, come again."))
+                        .await?;
                 }
-            }
-            Message::Frame(msg) => {
-                log::trace!("[WS] Received pong message: {:02X?}", msg);
+                Message::Binary(msg) => {
+                    log::trace!("[WS] Received binary message: {:02X?}", msg);
+                    websocket
+                        .send(Message::binary(b"Thank you, come again.".to_vec()))
+                        .await?;
+                }
+                Message::Ping(msg) => {
+                    // No need to send a reply: tungstenite takes care of this for you.
+                    log::trace!("[WS] Received ping message: {:02X?}", msg);
+                }
+                Message::Pong(msg) => {
+                    log::trace!("[WS] Received pong message: {:02X?}", msg);
+                }
+                Message::Close(msg) => {
+                    // No need to send a reply: tungstenite takes care of this for you.
+                    if let Some(msg) = &msg {
+                        println!(
+                            "Received close message with code {} and message: {}",
+                            msg.code, msg.reason
+                        );
+                    } else {
+                        log::trace!("[WS] Received close message");
+                    }
+                }
+                Message::Frame(msg) => {
+                    log::trace!("[WS] Received pong message: {:02X?}", msg);
+                }
             }
         }
     }

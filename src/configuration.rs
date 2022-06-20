@@ -642,4 +642,20 @@ mod tests {
             WsMessageTime::Recived(3)
         );
     }
+
+    #[test]
+    fn get_route_should_not_find_entry_if_the_url_only_partialy_matches() {
+        let routes = [Route {
+            method: RouteMethod::GET,
+            path: "/a".to_string(),
+            resource: "".to_string(),
+            messages: Vec::new()
+        }];
+
+        let uri = Uri::from_static("/a/test");
+
+        let result = get_route(&routes, &uri, &RouteMethod::GET);
+
+        assert_eq!(result, (None, None));
+    }
 }

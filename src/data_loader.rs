@@ -6,9 +6,9 @@ use tokio::fs;
 pub async fn load(route: &Route, parameter: Option<&str>) -> Option<Vec<u8>> {
     match if let Some(parameter) = parameter {
         let dynamic_resource = route.resource.replace("$$$", parameter);
-        file(dynamic_resource).await
+        file(dynamic_resource.as_str()).await
     } else {
-        file(route.resource.to_string()).await
+        file(&route.resource).await
     } {
         Ok(data) => Some(data.to_vec()),
         Err(_) => None,
@@ -16,7 +16,7 @@ pub async fn load(route: &Route, parameter: Option<&str>) -> Option<Vec<u8>> {
 }
 
 /// Load file for route.
-async fn file(resource: String) -> Result<Vec<u8>, std::io::Error> {
+pub async fn file(resource: &str) -> Result<Vec<u8>, std::io::Error> {
     log::trace!("Load File: {}", resource);
     match fs::read(&resource).await {
         Ok(data) => Ok(data),
