@@ -2,7 +2,7 @@
 
 use hyper::{Method, Uri};
 use serde::{Deserialize, Serialize};
-use std::{io::ErrorKind, str::FromStr};
+use std::{fmt::Display, io::ErrorKind, str::FromStr};
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
@@ -24,6 +24,7 @@ pub struct Route {
 /// A WS message with controll when it has to be sent
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct WsMessage {
+    /// Type of time
     pub kind: WsMessageType,
     /// This will be contveted to WsMessageTime
     pub time: String,
@@ -92,6 +93,18 @@ impl FromStr for WsMessageTime {
     }
 }
 
+impl Display for WsMessageTime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WsMessageTime::Second(t) => write!(f, "{}s", t),
+            WsMessageTime::Minute(t) => write!(f, "{}m", t),
+            WsMessageTime::Hour(t) => write!(f, "{}h", t),
+            WsMessageTime::Sent(t) => write!(f, "{}sent", t),
+            WsMessageTime::Recived(t) => write!(f, "{}recived", t),
+        }
+    }
+}
+
 /// This will take the number infront of a string
 ///
 /// # Exaples
@@ -115,10 +128,14 @@ fn parse_time_number(number: &str, padding: usize) -> Result<usize, u8> {
     }
 }
 
+/// Type of time
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum WsMessageType {
+    /// When the ws connects
     Startup,
+    /// Time after the ws connects
     After,
+    /// Repeat
     Every,
 }
 
