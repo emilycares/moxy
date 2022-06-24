@@ -1,3 +1,4 @@
+use futures_util::future;
 use std::{collections::HashMap, path::Path, sync::Arc};
 
 use tokio::{
@@ -6,7 +7,9 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::configuration::{self, Configuration, Route, RouteMethod};
+use crate::configuration::{self, Configuration, Route, RouteMethod, WsMessage, WsMessageType};
+
+use super::request::ws::WsClientMessage;
 
 /// Modifies the configuration and filesystem to add more entryes
 pub async fn save(
@@ -15,32 +18,28 @@ pub async fn save(
     body: Vec<u8>,
     headers: &HashMap<String, String>,
     config: Arc<Mutex<Configuration>>,
-    ) -> Result<(), std::io::Error> {
+) -> Result<(), std::io::Error> {
     let path = get_save_path(uri, headers);
     let mut config = config.lock().await;
-    if config.get_route(&path, &method).is_none() {
+    if config.get_route(&path, method).is_none() {
         let route = Route {
             method: method.clone(),
-            resource: path.clone(),
+            resource: Some(path.clone()),
             path: uri.to_owned(),
-            messages: Vec::new()
+            messages: Vec::new(),
         };
         log::info!("Save route: {:?}", route);
 
         config.routes.push(route);
 
-        let folders: String = if let Some(index) = path.rfind('/') {
-            path[0..index].to_owned()
-        } else {
-            path.to_owned()
-        };
+        let folders = get_folders(&path);
 
         match check_existing_file(folders.as_str()).await {
             Ok(resource_changes) => {
                 for (from, to) in resource_changes {
-                    if let Some(route) = config.get_route_by_resource_mut(&from.to_owned(), &method)
+                    if let Some(route) = config.get_route_by_resource_mut(&from.to_owned(), method)
                     {
-                        route.resource = to;
+                        route.resource = Some(to);
                     }
                 }
             }
@@ -114,8 +113,8 @@ fn get_folders_to_check(folders: &str) -> Vec<String> {
 
     for i in 1..length {
         let mut check = String::from("");
-        for y in 0..i {
-            check += &lft[y];
+        for (y, _item) in lft.iter().enumerate().take(i) {
+            check += lft[y];
             if y + 1 != i {
                 check += "/";
             }
@@ -125,6 +124,50 @@ fn get_folders_to_check(folders: &str) -> Vec<String> {
     }
 
     checks
+}
+
+/// Save websocket mesages on the file system
+pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) -> Vec<WsMessage> {
+    let messages: Vec<(WsMessage, Vec<u8>)> = messages
+        .iter()
+        .enumerate()
+        .map(|(i, message)| {
+            let path = path.to_owned() + "/_ws/" + &i.to_string() + ".txt";
+
+            (
+                WsMessage {
+                    kind: WsMessageType::Startup,
+                    time: None,
+                    location: path,
+                },
+                message.content.clone(),
+            )
+        })
+        .collect();
+
+    future::try_join_all(
+        messages
+            .clone()
+            .iter()
+            .map(|(message, content)| async move {
+                let folders = get_folders(&message.location);
+
+                //return Ok(message.clone());
+
+                match check_existing_file(folders.as_str()).await {
+                    Ok(_) => {}
+                    Err(e) => return Err(e),
+                }
+                return match save_file(&message.location, content.clone(), folders.as_str()).await {
+                    Ok(_) => Ok(message.clone()),
+                    Err(e) => Err(e),
+                };
+            }),
+    )
+    .await
+    .unwrap();
+
+    return messages.iter().map(|(msg, _)| msg.clone()).collect();
 }
 
 /// Saves a file to the expected location
@@ -155,8 +198,8 @@ pub fn get_save_path(uri: &str, headers: &HashMap<String, String>) -> String {
 /// convert content_type to filetype
 fn get_extension(content_type: Option<&String>) -> &str {
     if let Some(content_type) = content_type {
-        let content_type = if content_type.contains(";") {
-            if let Some(content_type) = content_type.split(";").next() {
+        let content_type = if content_type.contains(';') {
+            if let Some(content_type) = content_type.split(';').next() {
                 content_type
             } else {
                 content_type
@@ -184,15 +227,15 @@ fn get_extension(content_type: Option<&String>) -> &str {
             "application/octet-stream" => ".avif",
             _ => {
                 log::trace!("Unknown content-type: {}", content_type);
-                return ".txt";
-            },
+                ".txt"
+            }
         }
     } else {
-        return ".txt";
+        ".txt"
     }
 }
 
-/// convert filetype to content_type 
+/// convert filetype to content_type
 pub fn get_content_type(file_name: &str) -> &str {
     let extension = file_name.rsplit('.').next();
     if let Some(extension) = extension {
@@ -215,7 +258,15 @@ pub fn get_content_type(file_name: &str) -> &str {
             _ => "text",
         }
     } else {
-        return "text";
+        "text"
+    }
+}
+
+fn get_folders(path: &str) -> String {
+    if let Some(index) = path.rfind('/') {
+        path[0..index].to_owned()
+    } else {
+        path.to_owned()
     }
 }
 
