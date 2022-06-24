@@ -18,6 +18,7 @@ pub struct Route {
     /// File storeage location
     pub resource: Option<String>,
     /// Data for WS
+    #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<WsMessage>,
 }
