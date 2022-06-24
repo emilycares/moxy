@@ -54,21 +54,26 @@ pub async fn start() {
 
 /// Call data_loader or builder depending on if the route exists or not.
 async fn endpoint(
-    req: Request<Body>,
     config_a: Arc<Mutex<Configuration>>,
+    uri: &hyper::Uri,
+    method: &hyper::Method,
 ) -> Result<Response<Body>, Infallible> {
-    log::info!("{}", req.uri());
+    log::info!("{}", uri);
     let configc = config_a.clone();
     let mut config = configc.lock().await.to_owned();
     let (route, parameter) =
-        configuration::get_route(&config.routes, req.uri(), &RouteMethod::from(req.method()));
+        configuration::get_route(&config.routes, uri, &RouteMethod::from(method));
 
     if let Some(route) = route {
         let data = data_loader::load(route, parameter);
         if let Some(data) = data.await {
             let response = Response::builder()
                 .status(200)
-                .header("content-type", storage::get_content_type(&route.resource))
+                .header(
+                    "content-type",
+                    // unwrap is save here because there will never be data without a resource
+                    storage::get_content_type(route.resource.as_ref().unwrap()),
+                )
                 .body(Body::from(data))
                 .unwrap();
 
@@ -80,21 +85,19 @@ async fn endpoint(
             }
 
             if config.build_mode == Some(BuildMode::Write) {
-                builder::builder::build_response(config_a, req).await
+                builder::builder::build_response(config_a, uri, method).await
             } else {
                 log::error!("Will build new route for missing file");
                 let response = Response::builder().status(404).body(Body::empty()).unwrap();
                 Ok(response)
             }
         }
+    } else if config.build_mode == Some(BuildMode::Write) {
+        builder::builder::build_response(config_a, uri, method).await
     } else {
-        if config.build_mode == Some(BuildMode::Write) {
-            builder::builder::build_response(config_a, req).await
-        } else {
-            log::info!("Resource not found and build mode disabled");
-            let response = Response::builder().status(404).body(Body::empty()).unwrap();
-            Ok(response)
-        }
+        log::info!("Resource not found and build mode disabled");
+        let response = Response::builder().status(404).body(Body::empty()).unwrap();
+        Ok(response)
     }
 }
 
@@ -102,11 +105,13 @@ async fn check_ws(
     request: Request<Body>,
     config: Arc<Mutex<Configuration>>,
 ) -> Result<Response<Body>, Infallible> {
+    let uri = request.uri().clone();
+    let method = &request.method();
     if hyper_tungstenite::is_upgrade_request(&request) {
         if let Ok((response, websocket)) = hyper_tungstenite::upgrade(request, None) {
             // Spawn a task to handle the websocket connection.
             tokio::spawn(async move {
-                if let Err(e) = endpoint_ws(request, websocket, config).await {
+                if let Err(e) = endpoint_ws(&uri, websocket, config).await {
                     log::trace!("[WS] Error in websocket connection: {}", e);
                 }
             });
@@ -119,32 +124,32 @@ async fn check_ws(
             Ok(response)
         }
     } else {
-        endpoint(request, config).await
+        endpoint(config, &uri, method).await
     }
 }
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 async fn endpoint_ws(
-    reqwest: Request<Body>,
+    uri: &hyper::Uri,
     websocket: HyperWebsocket,
     config: Arc<Mutex<Configuration>>,
 ) -> Result<(), Error> {
     let mut config = config.lock().await.to_owned();
-    if let (Some(route), parameter) =
-        configuration::get_route(&config.routes, reqwest.uri(), &RouteMethod::WS)
+    if let (Some(route), _parameter) =
+        configuration::get_route(&config.routes, uri, &RouteMethod::WS)
     {
         let mut websocket = websocket.await?;
 
-        for c in route
+        let startup_files: Vec<Vec<u8>> = route
             .messages
             .par_iter()
             .filter(|c| c.kind == WsMessageType::Startup)
-            .map(|c| data_loader::file(c.location.as_str()))
-            .collect()
-        {
-            if let Ok(c) = c {
-                websocket.send(Message::binary(c)).await
-            }
+            .map(|c| data_loader::file_sync(c.location.as_str()))
+            .filter(|c| c.is_ok())
+            .map(|c| c.unwrap())
+            .collect();
+        for c in startup_files {
+            websocket.send(Message::binary(c)).await?;
         }
 
         log::trace!("[WS] sent some messages");
@@ -185,6 +190,9 @@ async fn endpoint_ws(
                 }
             }
         }
+    } else {
+        let route = builder::builder::build_ws(uri, websocket).await;
+        config.routes.push(route);
     }
 
     Ok(())

@@ -1,11 +1,14 @@
 use std::{collections::HashMap, convert::Infallible, sync::Arc};
 
-use hyper::{Body, Request, Response};
+use hyper::{Body, Response};
 use tokio::sync::Mutex;
 
-use crate::configuration::{BuildMode, Configuration, RouteMethod};
+use crate::configuration::{BuildMode, Configuration, Route, RouteMethod};
 
-use super::{request, storage};
+use super::{
+    request::{self, ws::WsClientMessage},
+    storage,
+};
 
 /// The data structure that will contain all relevant data. To easily convert a request to a response
 /// without doing a huge workaround.
@@ -25,15 +28,16 @@ pub struct ResourceData {
 /// same URL again.
 pub async fn build_response(
     config_a: Arc<Mutex<Configuration>>,
-    req: Request<Body>,
+    uri: &hyper::Uri,
+    method: &hyper::Method,
 ) -> Result<Response<Body>, Infallible> {
     let config_b = config_a.clone();
     let config = config_b.lock().await.to_owned();
-    if let Some(build_mode) = &config.build_mode { 
+    if let Some(build_mode) = &config.build_mode {
         if let Some(remote) = &config.remote {
             let response = request::http::fetch_http(
-                RouteMethod::from(req.method().clone()),
-                request::util::get_url(req.uri(), remote),
+                RouteMethod::from(method),
+                request::util::get_url(uri, remote),
                 None,
                 HashMap::new(),
             )
@@ -45,7 +49,7 @@ pub async fn build_response(
                         if response.code != 404 && build_mode == &BuildMode::Write {
                             storage::save(
                                 &response.method,
-                                req.uri().path(),
+                                uri.path(),
                                 body.clone(),
                                 &response.headers,
                                 config_a,
@@ -78,7 +82,11 @@ pub async fn build_response(
 }
 
 /// Returns a respinse with headers and a code
-pub fn get_response(headers: HashMap<String, String>, code: u16, body: Body) -> Result<Response<Body>, Infallible> {
+pub fn get_response(
+    headers: HashMap<String, String>,
+    code: u16,
+    body: Body,
+) -> Result<Response<Body>, Infallible> {
     let mut response = Response::builder().status(code);
 
     for (key, value) in headers.into_iter() {
@@ -88,16 +96,32 @@ pub fn get_response(headers: HashMap<String, String>, code: u16, body: Body) -> 
     Ok(response.body(body).unwrap())
 }
 
+/// generate route for a websocket
+pub async fn build_ws(uri: &hyper::Uri, _websocket: hyper_tungstenite::HyperWebsocket) -> Route {
+    let path = uri.path().to_string();
+    let mut route = Route {
+        method: RouteMethod::WS,
+        path: path.clone(),
+        resource: None,
+        messages: Vec::new(),
+    };
+
+    let client_messages: Vec<WsClientMessage> = Vec::new();
+
+    let messages = request::ws::fetch_ws(&path, HashMap::new(), client_messages).await;
+
+    if let Ok(messages) = messages {
+        route.messages = storage::save_ws_client_message(&path, messages).await;
+    }
+
+    route
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
 
-    use hyper::Uri;
-
-    use crate::{
-        builder::request,
-        configuration::{Route, RouteMethod},
-    };
+    use crate::{builder::request, configuration::RouteMethod};
 
     #[tokio::test]
     async fn requrest_no_body() {
