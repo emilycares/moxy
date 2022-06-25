@@ -188,15 +188,20 @@ pub fn get_save_path(uri: &str, headers: &HashMap<String, String>) -> String {
         path += "index";
     }
 
-    if !path.ends_with(&file_suffix) {
-        path += file_suffix;
+    if let Some(file_suffix) = file_suffix {
+        if !path.ends_with(file_suffix) {
+            path += ".";
+            path += file_suffix;
+        }
+    } else {
+        path += ".txt";
     }
 
     path
 }
 
 /// convert content_type to filetype
-fn get_extension(content_type: Option<&String>) -> &str {
+fn get_extension(content_type: Option<&String>) -> Option<&&str> {
     if let Some(content_type) = content_type {
         let content_type = if content_type.contains(';') {
             if let Some(content_type) = content_type.split(';').next() {
@@ -208,58 +213,28 @@ fn get_extension(content_type: Option<&String>) -> &str {
             content_type
         };
 
-        match content_type {
-            "application/json" => ".json",
-            "application/javascript" => ".js",
-            "text/css" => ".css",
-            // xml
-            "text/xml" => ".xml",
-            "application/xml" => ".xml",
-            "image/svg+xml" => ".svg",
-            "application/xhtml+xml" => ".xhtml",
-            "text/html" => ".html",
-            "text/plain" => ".txt",
-            // image
-            "image/x-icon" => ".ico",
-            "image/png" => ".png",
-            "image/gif" => ".gif",
-            // sound
-            "application/octet-stream" => ".avif",
-            _ => {
-                log::trace!("Unknown content-type: {}", content_type);
-                ".txt"
+        let mime = content_type.parse::<mime::Mime>();
+        if mime.is_ok() {
+            if let Some(mime) = mime_guess::get_mime_extensions_str(content_type) {
+                return mime.first();
             }
         }
+
+        None
     } else {
-        ".txt"
+        None
     }
 }
 
 /// convert filetype to content_type
-pub fn get_content_type(file_name: &str) -> &str {
-    let extension = file_name.rsplit('.').next();
-    if let Some(extension) = extension {
-        match extension {
-            "json" => "application/json",
-            "js" => "application/javascript",
-            "css" => "text/css",
-            // xml
-            "xml" => "application/xml",
-            "svg" => "image/svg+xml",
-            "xhtml" => "application/xhtml+xml",
-            "html" => "text/html",
-            "txt" => "text/plain",
-            // image
-            "ico" => "image/x-icon",
-            "png" => "image/png",
-            "gif" => "image/gif",
-            // sound
-            "avif" => "application/octet-stream",
-            _ => "text",
-        }
-    } else {
-        "text"
+pub fn get_content_type(file_name: &str) -> String {
+    let guess = mime_guess::from_path(file_name).first();
+
+    if let Some(guess) = guess {
+        return guess.to_string();
     }
+
+    "text/plain".to_owned()
 }
 
 fn get_folders(path: &str) -> String {
