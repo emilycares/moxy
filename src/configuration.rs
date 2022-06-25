@@ -505,7 +505,7 @@ mod tests {
             )
             .0
             .unwrap()
-            .resource
+            .resource.as_ref()
             .unwrap(),
             "db/api/1/$$$.json"
         );
@@ -519,7 +519,7 @@ mod tests {
             )
             .0
             .unwrap()
-            .resource
+            .resource.as_ref()
             .unwrap(),
             "db/api/2/$$$.json"
         );
@@ -533,7 +533,7 @@ mod tests {
             )
             .0
             .unwrap()
-            .resource
+            .resource.as_ref()
             .unwrap(),
             "db/api/3/$$$.json"
         );
@@ -566,7 +566,7 @@ mod tests {
             )
             .0
             .unwrap()
-            .resource
+            .resource.as_ref()
             .unwrap(),
             "db/api/$$$.txt"
         );
@@ -580,7 +580,7 @@ mod tests {
             )
             .0
             .unwrap()
-            .resource
+            .resource.as_ref()
             .unwrap(),
             "db/api/$$$.json"
         );
