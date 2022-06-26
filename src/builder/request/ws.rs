@@ -54,7 +54,12 @@ async fn send_ws_messages(
 ) {
     for m in messages {
         sleep(Duration::from_secs(m.offset)).await;
-        match write.send(Message::Binary(m.content)).await {
+        let content = m.content;
+        let message = match m.binary {
+            true => Message::Binary(content),
+            false => Message::Text(std::str::from_utf8(&content).unwrap().to_owned())
+        };
+        match write.send(message).await {
             Ok(_data) => log::trace!("[WS] sent message to server"),
             Err(_) => log::trace!("[WS] Unable to send data to server"),
         }
@@ -71,10 +76,12 @@ async fn read_ws_messages(
     while start.elapsed() < dur {
         if let Some(Ok(message)) = read.next().await {
             let differece = start.elapsed();
+            let binary = !message.is_text();
             let data = message.into_data();
             messages.push(WsClientMessage {
                 offset: differece.as_secs(),
                 content: data,
+                binary,
             });
         }
     }
@@ -98,4 +105,7 @@ pub struct WsClientMessage {
     pub offset: u64,
     /// Message content
     pub content: Vec<u8>,
+    /// If data is not a string
+    pub binary: bool,
+
 }

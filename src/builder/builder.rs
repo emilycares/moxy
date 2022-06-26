@@ -137,6 +137,7 @@ pub async fn build_ws(
                     let message = WsClientMessage {
                         offset,
                         content: msg.as_bytes().to_vec(),
+                        binary: false,
                     };
                     client_messages.push(message);
                 }
@@ -145,6 +146,7 @@ pub async fn build_ws(
                     let message = WsClientMessage {
                         offset,
                         content: msg,
+                        binary: true,
                     };
                     client_messages.push(message);
                 }
@@ -165,6 +167,8 @@ pub async fn build_ws(
                     } else {
                         log::trace!("[WS] Received close message");
                     }
+
+                    break;
                 }
                 Message::Frame(msg) => {
                     log::trace!("[WS] Received pong message: {:02X?}", msg);
