@@ -149,50 +149,32 @@ async fn endpoint_ws(
             .map(|c| c.unwrap())
             .collect();
         for c in startup_files {
-            websocket.send(Message::binary(c)).await?;
+            match std::str::from_utf8(&c) {
+                Ok(m) => websocket.send(Message::text(m)).await?,
+                Err(_) => websocket.send(Message::binary(c)).await?,
+            };
         }
 
         log::trace!("[WS] sent some messages");
-        while let Some(message) = websocket.next().await {
-            match message? {
-                Message::Text(msg) => {
-                    log::trace!("[WS] Received text message: {}", msg);
-                    websocket
-                        .send(Message::text("Thank you, come again."))
-                        .await?;
-                }
-                Message::Binary(msg) => {
-                    log::trace!("[WS] Received binary message: {:02X?}", msg);
-                    websocket
-                        .send(Message::binary(b"Thank you, come again.".to_vec()))
-                        .await?;
-                }
-                Message::Ping(msg) => {
-                    // No need to send a reply: tungstenite takes care of this for you.
-                    log::trace!("[WS] Received ping message: {:02X?}", msg);
-                }
-                Message::Pong(msg) => {
-                    log::trace!("[WS] Received pong message: {:02X?}", msg);
-                }
-                Message::Close(msg) => {
-                    // No need to send a reply: tungstenite takes care of this for you.
-                    if let Some(msg) = &msg {
-                        println!(
-                            "Received close message with code {} and message: {}",
-                            msg.code, msg.reason
-                        );
-                    } else {
-                        log::trace!("[WS] Received close message");
-                    }
-                }
-                Message::Frame(msg) => {
-                    log::trace!("[WS] Received pong message: {:02X?}", msg);
-                }
-            }
-        }
+        while let Some(_message) = websocket.next().await {}
     } else {
-        let route = builder::builder::build_ws(uri, websocket).await;
-        config.routes.push(route);
+        if config.build_mode == Some(BuildMode::Write) {
+            if let Some(remote) = &config.remote {
+                let route = builder::builder::build_ws(uri, remote.to_owned(), websocket).await;
+                config.routes.push(route);
+                configuration::save_configuration(config.to_owned()).await?;
+            } else {
+                log::info!(
+                    "There is no configuration for the url: {}, and there is no remote specified",
+                    &uri.to_string()
+                );
+            }
+        } else {
+            log::info!(
+                "There is no configuration for the url: {}, and the build_mode is not set to Write",
+                &uri.to_string()
+            );
+        }
     }
 
     Ok(())

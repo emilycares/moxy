@@ -26,7 +26,7 @@ pub async fn save(
             method: method.clone(),
             resource: Some(path.clone()),
             path: uri.to_owned(),
-            messages: Vec::new(),
+            messages: vec![],
         };
         log::info!("Save route: {:?}", route);
 
@@ -132,8 +132,26 @@ pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) 
         .iter()
         .enumerate()
         .map(|(i, message)| {
-            let path = path.to_owned() + "/_ws/" + &i.to_string() + ".txt";
+            let mut path = path.to_owned() + "_ws/" + &i.to_string();
 
+            let is_json: bool = {
+                match std::str::from_utf8(&message.content) {
+                    Ok(message) => {
+                        let json: Result<serde_json::Value, serde_json::Error> =
+                            serde_json::from_str(message);
+
+                        json.is_ok()
+                    }
+                    Err(_) => false,
+                }
+            };
+            if is_json {
+                path += ".json";
+            }
+
+            let path = get_save_path(path.as_str(), &HashMap::new());
+
+            log::trace!("path: {}", path);
             (
                 WsMessage {
                     kind: WsMessageType::Startup,
@@ -181,7 +199,11 @@ async fn save_file(location: &str, body: Vec<u8>, folder: &str) -> Result<(), st
 
 /// Will generate a file location based on a uri.
 pub fn get_save_path(uri: &str, headers: &HashMap<String, String>) -> String {
-    let file_suffix = get_extension(headers.get("content-type"));
+    let file_suffix = if uri.ends_with(".txt") || uri.ends_with(".json") {
+        Some(&"")
+    } else {
+        get_extension(headers.get("content-type"))
+    };
     let mut path = "./db".to_owned() + uri;
 
     if path.ends_with('/') {

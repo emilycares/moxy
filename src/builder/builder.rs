@@ -1,6 +1,13 @@
-use std::{collections::HashMap, convert::Infallible, sync::Arc};
+use std::{
+    collections::HashMap,
+    convert::Infallible,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
+use futures_util::StreamExt;
 use hyper::{Body, Response};
+use hyper_tungstenite::tungstenite::Message;
 use tokio::sync::Mutex;
 
 use crate::configuration::{BuildMode, Configuration, Route, RouteMethod};
@@ -97,20 +104,96 @@ pub fn get_response(
 }
 
 /// generate route for a websocket
-pub async fn build_ws(uri: &hyper::Uri, _websocket: hyper_tungstenite::HyperWebsocket) -> Route {
+pub async fn build_ws(
+    uri: &hyper::Uri,
+    remote: String,
+    websocket: hyper_tungstenite::HyperWebsocket,
+) -> Route {
     let path = uri.path().to_string();
     let mut route = Route {
         method: RouteMethod::WS,
         path: path.clone(),
         resource: None,
-        messages: Vec::new(),
+        messages: vec![],
     };
 
-    let client_messages: Vec<WsClientMessage> = Vec::new();
+    let mut client_messages: Vec<WsClientMessage> = vec![];
 
-    let messages = request::ws::fetch_ws(&path, HashMap::new(), client_messages).await;
+    let mut websocket = match websocket.await {
+        Ok(w) => w,
+        Err(_) => todo!(),
+    };
+    // record messages from client
+    let start = Instant::now();
+    let dur = Duration::from_secs(5);
+    while start.elapsed() < dur {
+        log::trace!("{:#?} < {:#?} = {:#?}", start.elapsed(), dur, start.elapsed() < dur);
+        if let Some(Ok(message)) = websocket.next().await {
+            let differece = start.elapsed();
+            let offset = differece.as_secs();
+            match message {
+                Message::Text(msg) => {
+                    log::trace!("[WS] Received text message: {}", msg);
+                    let message = WsClientMessage {
+                        offset,
+                        content: msg.as_bytes().to_vec(),
+                        binary: false,
+                    };
+                    client_messages.push(message);
+                }
+                Message::Binary(msg) => {
+                    log::trace!("[WS] Received binary message: {:02X?}", msg);
+                    let message = WsClientMessage {
+                        offset,
+                        content: msg,
+                        binary: true,
+                    };
+                    client_messages.push(message);
+                }
+                Message::Ping(msg) => {
+                    // No need to send a reply: tungstenite takes care of this for you.
+                    log::trace!("[WS] Received ping message: {:02X?}", msg);
+                }
+                Message::Pong(msg) => {
+                    log::trace!("[WS] Received pong message: {:02X?}", msg);
+                }
+                Message::Close(msg) => {
+                    // No need to send a reply: tungstenite takes care of this for you.
+                    if let Some(msg) = &msg {
+                        println!(
+                            "Received close message with code {} and message: {}",
+                            msg.code, msg.reason
+                        );
+                    } else {
+                        log::trace!("[WS] Received close message");
+                    }
+
+                    break;
+                }
+                Message::Frame(msg) => {
+                    log::trace!("[WS] Received pong message: {:02X?}", msg);
+                }
+            }
+        }
+    }
+
+    log::info!("The messages: {:?}", client_messages);
+
+    if websocket.close(None).await.is_err() {
+        log::error!("Unable to close websocket");
+    }
+
+    let messages = request::ws::fetch_ws(
+        &request::util::get_url(uri, &remote),
+        HashMap::new(),
+        client_messages,
+    )
+    .await;
+
+    log::trace!("{:#?}", messages);
 
     if let Ok(messages) = messages {
+        log::trace!("messages to save: {:#?}", messages);
         route.messages = storage::save_ws_client_message(&path, messages).await;
     }
 
