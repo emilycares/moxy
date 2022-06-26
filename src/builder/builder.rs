@@ -1,6 +1,13 @@
-use std::{collections::HashMap, convert::Infallible, sync::Arc};
+use std::{
+    collections::HashMap,
+    convert::Infallible,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
+use futures_util::StreamExt;
 use hyper::{Body, Response};
+use hyper_tungstenite::tungstenite::Message;
 use tokio::sync::Mutex;
 
 use crate::configuration::{BuildMode, Configuration, Route, RouteMethod};
@@ -97,7 +104,7 @@ pub fn get_response(
 }
 
 /// generate route for a websocket
-pub async fn build_ws(uri: &hyper::Uri, _websocket: hyper_tungstenite::HyperWebsocket) -> Route {
+pub async fn build_ws(uri: &hyper::Uri, websocket: hyper_tungstenite::HyperWebsocket) -> Route {
     let path = uri.path().to_string();
     let mut route = Route {
         method: RouteMethod::WS,
@@ -107,6 +114,48 @@ pub async fn build_ws(uri: &hyper::Uri, _websocket: hyper_tungstenite::HyperWebs
     };
 
     let client_messages: Vec<WsClientMessage> = Vec::new();
+
+    let mut websocket = match websocket.await {
+        Ok(w) => w,
+        Err(_) => todo!(),
+    };
+    // record messages from client
+    let start = Instant::now();
+    while let Some(Ok(message)) = websocket.next().await {
+        let differece = start.elapsed();
+        if differece >= Duration::from_secs(30) {
+            break;
+        }
+        match message {
+            Message::Text(msg) => {
+                log::trace!("[WS] Received text message: {}", msg);
+            }
+            Message::Binary(msg) => {
+                log::trace!("[WS] Received binary message: {:02X?}", msg);
+            }
+            Message::Ping(msg) => {
+                // No need to send a reply: tungstenite takes care of this for you.
+                log::trace!("[WS] Received ping message: {:02X?}", msg);
+            }
+            Message::Pong(msg) => {
+                log::trace!("[WS] Received pong message: {:02X?}", msg);
+            }
+            Message::Close(msg) => {
+                // No need to send a reply: tungstenite takes care of this for you.
+                if let Some(msg) = &msg {
+                    println!(
+                        "Received close message with code {} and message: {}",
+                        msg.code, msg.reason
+                    );
+                } else {
+                    log::trace!("[WS] Received close message");
+                }
+            }
+            Message::Frame(msg) => {
+                log::trace!("[WS] Received pong message: {:02X?}", msg);
+            }
+        }
+    }
 
     let messages = request::ws::fetch_ws(&path, HashMap::new(), client_messages).await;
 
