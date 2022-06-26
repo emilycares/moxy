@@ -399,7 +399,7 @@ mod tests {
             method: RouteMethod::GET,
             path: "/api/test".to_string(),
             resource: Some("db/api/test.json".to_string()),
-            messages: Vec::new(),
+            messages: vec![],
         }];
         let url = &"http://localhost:8080/api/test".parse::<Uri>().unwrap();
         let (result, parameter) = get_route(&routes, &url, &RouteMethod::GET);
@@ -416,19 +416,19 @@ mod tests {
                     method: RouteMethod::GET,
                     path: "/a".to_string(),
                     resource: Some("somefile.txt".to_string()),
-                    messages: Vec::new(),
+                    messages: vec![],
                 },
                 Route {
                     method: RouteMethod::GET,
                     path: "/b".to_string(),
                     resource: Some("somefile.txt".to_string()),
-                    messages: Vec::new(),
+                    messages: vec![],
                 },
                 Route {
                     method: RouteMethod::GET,
                     path: "/c".to_string(),
                     resource: Some("somefile.txt".to_string()),
-                    messages: Vec::new(),
+                    messages: vec![],
                 },
             ],
             host: None,
@@ -447,19 +447,19 @@ mod tests {
                     method: RouteMethod::GET,
                     path: "/a".to_string(),
                     resource: Some("somefile.txt".to_string()),
-                    messages: Vec::new(),
+                    messages: vec![],
                 },
                 Route {
                     method: RouteMethod::GET,
                     path: "/b".to_string(),
                     resource: Some("somefile.txt".to_string()),
-                    messages: Vec::new(),
+                    messages: vec![],
                 },
                 Route {
                     method: RouteMethod::GET,
                     path: "/c".to_string(),
                     resource: Some("somefile.txt".to_string()),
-                    messages: Vec::new(),
+                    messages: vec![],
                 },
             ],
             host: None,
@@ -479,19 +479,19 @@ mod tests {
                 method: RouteMethod::GET,
                 path: "/api/test/1/$$$.json".to_string(),
                 resource: Some("db/api/1/$$$.json".to_string()),
-                messages: Vec::new(),
+                messages: vec![],
             },
             Route {
                 method: RouteMethod::GET,
                 path: "/api/test/2/$$$.json".to_string(),
                 resource: Some("db/api/2/$$$.json".to_string()),
-                messages: Vec::new(),
+                messages: vec![],
             },
             Route {
                 method: RouteMethod::GET,
                 path: "/api/test/3/$$$.json".to_string(),
                 resource: Some("db/api/3/$$$.json".to_string()),
-                messages: Vec::new(),
+                messages: vec![],
             },
         ];
 
@@ -546,13 +546,13 @@ mod tests {
                 method: RouteMethod::GET,
                 path: "/api/test/$$$.txt".to_string(),
                 resource: Some("db/api/$$$.txt".to_string()),
-                messages: Vec::new(),
+                messages: vec![],
             },
             Route {
                 method: RouteMethod::GET,
                 path: "/api/test/$$$.json".to_string(),
                 resource: Some("db/api/$$$.json".to_string()),
-                messages: Vec::new(),
+                messages: vec![],
             },
         ];
 
@@ -592,7 +592,7 @@ mod tests {
             method: RouteMethod::GET,
             path: "/api/test/$$$".to_string(),
             resource: Some("db/api/$$$".to_string()),
-            messages: Vec::new(),
+            messages: vec![],
         }];
 
         assert_eq!(
@@ -613,7 +613,7 @@ mod tests {
             method: RouteMethod::GET,
             path: "/api/test/$$$.txt".to_string(),
             resource: Some("db/api/$$$.txt".to_string()),
-            messages: Vec::new(),
+            messages: vec![],
         }];
 
         assert_eq!(
@@ -660,7 +660,7 @@ mod tests {
             method: RouteMethod::GET,
             path: "/a".to_string(),
             resource: Some("".to_string()),
-            messages: Vec::new(),
+            messages: vec![],
         }];
 
         let uri = Uri::from_static("/a/test");

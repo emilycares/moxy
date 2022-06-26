@@ -26,7 +26,7 @@ pub async fn save(
             method: method.clone(),
             resource: Some(path.clone()),
             path: uri.to_owned(),
-            messages: Vec::new(),
+            messages: vec![],
         };
         log::info!("Save route: {:?}", route);
 
@@ -132,8 +132,10 @@ pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) 
         .iter()
         .enumerate()
         .map(|(i, message)| {
-            let path = path.to_owned() + "/_ws/" + &i.to_string() + ".txt";
+            let path = path.to_owned() + "_ws/" + &i.to_string();
+            let path = get_save_path(path.as_str(), &HashMap::new());
 
+            log::trace!("path: {}", path);
             (
                 WsMessage {
                     kind: WsMessageType::Startup,
