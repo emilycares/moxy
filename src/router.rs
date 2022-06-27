@@ -57,7 +57,7 @@ async fn endpoint(
     config_a: Arc<Mutex<Configuration>>,
     uri: &hyper::Uri,
     method: &hyper::Method,
-    ) -> Result<Response<Body>, Infallible> {
+) -> Result<Response<Body>, Infallible> {
     log::info!("{}", uri);
     let configc = config_a.clone();
     let mut config = configc.lock().await.to_owned();
@@ -73,7 +73,7 @@ async fn endpoint(
                     "content-type",
                     // unwrap is save here because there will never be data without a resource
                     storage::get_content_type(route.resource.as_ref().unwrap()),
-                    )
+                )
                 .body(Body::from(data))
                 .unwrap();
 
@@ -104,7 +104,7 @@ async fn endpoint(
 async fn check_ws(
     request: Request<Body>,
     config: Arc<Mutex<Configuration>>,
-    ) -> Result<Response<Body>, Infallible> {
+) -> Result<Response<Body>, Infallible> {
     let uri = request.uri().clone();
     let method = &request.method();
     if hyper_tungstenite::is_upgrade_request(&request) {
@@ -133,88 +133,88 @@ async fn endpoint_ws(
     uri: &hyper::Uri,
     websocket: HyperWebsocket,
     config: Arc<Mutex<Configuration>>,
-    ) -> Result<(), Error> {
+) -> Result<(), Error> {
     let mut config = config.lock().await.to_owned();
     if let (Some(route), _parameter) =
         configuration::get_route(&config.routes, uri, &RouteMethod::WS)
-        {
-            let mut websocket = websocket.await?;
+    {
+        let mut websocket = websocket.await?;
 
-            let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+        let (tx, mut rx) = tokio::sync::mpsc::channel(32);
 
-            let startup_messges: Vec<Vec<u8>> = route
-                .messages
-                .par_iter()
-                .filter(|c| c.kind == WsMessageType::Startup)
-                .map(|c| data_loader::file_sync(c.location.as_str()))
-                .filter(|c| c.is_ok())
-                .map(|c| c.unwrap())
-                .collect();
+        let startup_messges: Vec<Vec<u8>> = route
+            .messages
+            .par_iter()
+            .filter(|c| c.kind == WsMessageType::Startup)
+            .map(|c| data_loader::file_sync(c.location.as_str()))
+            .filter(|c| c.is_ok())
+            .map(|c| c.unwrap())
+            .collect();
 
-            for c in startup_messges {
-                match std::str::from_utf8(&c) {
-                    Ok(m) => tx.send(Message::text(m)).await?,
-                    Err(_) => tx.send(Message::binary(c)).await?,
-                };
-            }
-            let after_messages: Vec<(Duration, Vec<u8>)> = route
-                .messages
-                .par_iter()
-                .filter(|c| c.kind == WsMessageType::After)
-                .map(|c| (c.get_time(), data_loader::file_sync(c.location.as_str())))
-                .filter(|c| c.0.is_some() && c.1.is_ok())
-                .map(|c| (c.0.unwrap(), c.1.unwrap()))
-                .collect();
+        for c in startup_messges {
+            match std::str::from_utf8(&c) {
+                Ok(m) => tx.send(Message::text(m)).await?,
+                Err(_) => tx.send(Message::binary(c)).await?,
+            };
+        }
+        let after_messages: Vec<(Duration, Vec<u8>)> = route
+            .messages
+            .par_iter()
+            .filter(|c| c.kind == WsMessageType::After)
+            .map(|c| (c.get_time(), data_loader::file_sync(c.location.as_str())))
+            .filter(|c| c.0.is_some() && c.1.is_ok())
+            .map(|c| (c.0.unwrap(), c.1.unwrap()))
+            .collect();
 
-            let mut tasks = FuturesUnordered::new();
+        let mut tasks = FuturesUnordered::new();
 
-            //tasks.push(tokio::task::spawn(async move {
-            //while let Some(_message) = websocket.next().await {}
-            //}));
+        //tasks.push(tokio::task::spawn(async move {
+        //while let Some(_message) = websocket.next().await {}
+        //}));
 
-            for m in after_messages {
-                let tx = tx.clone();
-                tasks.push(tokio::task::spawn(async move {
-                    tokio::time::sleep(m.0).await;
-
-                    let msg = m.1;
-
-                    match std::str::from_utf8(&msg) {
-                        Ok(m) => tx.send(Message::text(m)).await.unwrap(),
-                        Err(_) => tx.send(Message::binary(msg.clone())).await.unwrap(),
-                    }
-                }));
-            }
-
+        for m in after_messages {
+            let tx = tx.clone();
             tasks.push(tokio::task::spawn(async move {
-                while let Some(message) = rx.recv().await {
-                    match websocket.send(message).await {
-                        Ok(_) => log::trace!("Sent message"),
-                        Err(_) => log::error!("Failed to send message"),
-                    }
+                tokio::time::sleep(m.0).await;
+
+                let msg = m.1;
+
+                match std::str::from_utf8(&msg) {
+                    Ok(m) => tx.send(Message::text(m)).await.unwrap(),
+                    Err(_) => tx.send(Message::binary(msg.clone())).await.unwrap(),
                 }
             }));
+        }
 
-            // execute all tasks
-            while (tasks.next().await).is_some() {}
-        } else if config.build_mode == Some(BuildMode::Write) {
-            if let Some(remote) = &config.remote {
-                log::trace!("Start ws build");
-                let route = builder::builder::build_ws(uri, remote.to_owned(), websocket).await;
-                config.routes.push(route);
-                configuration::save_configuration(config.to_owned()).await?;
-            } else {
-                log::info!(
-                    "There is no configuration for the url: {}, and there is no remote specified",
-                    &uri.to_string()
-                    );
+        tasks.push(tokio::task::spawn(async move {
+            while let Some(message) = rx.recv().await {
+                match websocket.send(message).await {
+                    Ok(_) => log::trace!("Sent message"),
+                    Err(_) => log::error!("Failed to send message"),
+                }
             }
+        }));
+
+        // execute all tasks
+        while (tasks.next().await).is_some() {}
+    } else if config.build_mode == Some(BuildMode::Write) {
+        if let Some(remote) = &config.remote {
+            log::trace!("Start ws build");
+            let route = builder::builder::build_ws(uri, remote.to_owned(), websocket).await;
+            config.routes.push(route);
+            configuration::save_configuration(config.to_owned()).await?;
         } else {
             log::info!(
-                "There is no configuration for the url: {}, and the build_mode is not set to Write",
+                "There is no configuration for the url: {}, and there is no remote specified",
                 &uri.to_string()
-                );
-}
-
-Ok(())
+            );
+        }
+    } else {
+        log::info!(
+            "There is no configuration for the url: {}, and the build_mode is not set to Write",
+            &uri.to_string()
+        );
     }
+
+    Ok(())
+}

@@ -2,13 +2,15 @@
 
 use hyper::{Method, Uri};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, io::ErrorKind, str::FromStr, time::Duration, convert::TryInto};
+use serde_with::skip_serializing_none;
+use std::{convert::TryInto, fmt::Display, io::ErrorKind, str::FromStr, time::Duration};
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
 };
 
 /// This represents one route that can be navigated to
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Route {
     /// HTTP method
@@ -17,7 +19,6 @@ pub struct Route {
     pub path: String,
     /// File storeage location
     #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub resource: Option<String>,
     /// Data for WS
     #[serde(default)]
@@ -26,11 +27,13 @@ pub struct Route {
 }
 
 /// A WS message with controll when it has to be sent
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct WsMessage {
     /// Type of time
     pub kind: WsMessageType,
     /// This will be contveted to WsMessageTime
+    #[serde(default)]
     pub time: Option<String>,
     /// File storeage location
     pub location: String,
@@ -48,7 +51,6 @@ impl WsMessage {
         None
     }
 }
-
 
 /// Time units
 #[derive(Debug, PartialEq)]
@@ -521,7 +523,8 @@ mod tests {
             )
             .0
             .unwrap()
-            .resource.as_ref()
+            .resource
+            .as_ref()
             .unwrap(),
             "db/api/1/$$$.json"
         );
@@ -535,7 +538,8 @@ mod tests {
             )
             .0
             .unwrap()
-            .resource.as_ref()
+            .resource
+            .as_ref()
             .unwrap(),
             "db/api/2/$$$.json"
         );
@@ -549,7 +553,8 @@ mod tests {
             )
             .0
             .unwrap()
-            .resource.as_ref()
+            .resource
+            .as_ref()
             .unwrap(),
             "db/api/3/$$$.json"
         );
@@ -582,7 +587,8 @@ mod tests {
             )
             .0
             .unwrap()
-            .resource.as_ref()
+            .resource
+            .as_ref()
             .unwrap(),
             "db/api/$$$.txt"
         );
@@ -596,7 +602,8 @@ mod tests {
             )
             .0
             .unwrap()
-            .resource.as_ref()
+            .resource
+            .as_ref()
             .unwrap(),
             "db/api/$$$.json"
         );
