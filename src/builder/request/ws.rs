@@ -72,7 +72,7 @@ async fn read_ws_messages(
 ) -> Vec<WsClientMessage> {
     let mut messages = vec![];
     let start = Instant::now();
-    let dur = Duration::from_secs(5);
+    let dur = Duration::from_secs(50);
     while start.elapsed() < dur {
         if let Some(Ok(message)) = read.next().await {
             let differece = start.elapsed();

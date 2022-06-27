@@ -151,18 +151,26 @@ pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) 
 
             let path = get_save_path(path.as_str(), &HashMap::new());
 
-
-             let time = message.offset.to_string() + "s";
-
-            log::trace!("path: {}", path);
-            (
-                WsMessage {
-                    kind: WsMessageType::After,
-                    time: Some(time),
-                    location: path,
-                },
-                message.content.clone(),
-            )
+            if message.offset >= 5 {
+                (
+                    WsMessage {
+                        kind: WsMessageType::Startup,
+                        time: None,
+                        location: path,
+                    },
+                    message.content.clone(),
+                )
+            } else {
+                let time = message.offset.to_string() + "s";
+                (
+                    WsMessage {
+                        kind: WsMessageType::After,
+                        time: Some(time),
+                        location: path,
+                    },
+                    message.content.clone(),
+                )
+            }
         })
         .collect();
 

@@ -125,7 +125,7 @@ pub async fn build_ws(
     };
     // record messages from client
     let start = Instant::now();
-    let dur = Duration::from_secs(5);
+    let dur = Duration::from_secs(50);
     while start.elapsed() < dur {
         if let Some(Ok(message)) = websocket.next().await {
             let differece = start.elapsed();

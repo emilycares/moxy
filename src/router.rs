@@ -6,10 +6,9 @@ use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 
 use hyper::{
     service::{make_service_fn, service_fn},
-    upgrade::Upgraded,
     Body, Request, Response, Server,
 };
-use hyper_tungstenite::{tungstenite::Message, HyperWebsocket, WebSocketStream};
+use hyper_tungstenite::{tungstenite::Message, HyperWebsocket};
 use tokio::sync::Mutex;
 
 use crate::{
