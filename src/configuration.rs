@@ -38,10 +38,10 @@ pub struct WsMessage {
 
 impl WsMessage {
     /// get parsed WsMessageTime
-    pub fn get_time(&self) -> Option<WsMessageTime> {
+    pub fn get_time(&self) -> Option<Duration> {
         if let Some(time) = &self.time {
             if let Ok(time) = time.parse::<WsMessageTime>() {
-                return Some(time);
+                return Some(Duration::from(time));
             }
         }
 
@@ -59,6 +59,10 @@ pub enum WsMessageTime {
     Minute(usize),
     /// 5h
     Hour(usize),
+    /// 5sent ;After x messages sent messages
+    Sent(usize),
+    /// 5recived ;After x messages recived messages
+    Recived(usize),
 }
 
 impl FromStr for WsMessageTime {
@@ -80,6 +84,16 @@ impl FromStr for WsMessageTime {
             if let Ok(number) = parse_time_number(s, padding) {
                 return Ok(Self::Hour(number));
             }
+        } else if s.ends_with("sent") {
+            let padding = 4;
+            if let Ok(number) = parse_time_number(s, padding) {
+                return Ok(Self::Sent(number));
+            }
+        } else if s.ends_with("recived") {
+            let padding = 7;
+            if let Ok(number) = parse_time_number(s, padding) {
+                return Ok(Self::Recived(number));
+            }
         }
 
         Err(1)
@@ -92,6 +106,8 @@ impl Display for WsMessageTime {
             WsMessageTime::Second(t) => write!(f, "{}s", t),
             WsMessageTime::Minute(t) => write!(f, "{}m", t),
             WsMessageTime::Hour(t) => write!(f, "{}h", t),
+            WsMessageTime::Sent(t) => write!(f, "{}sent", t),
+            WsMessageTime::Recived(t) => write!(f, "{}recived", t),
         }
     }
 }
@@ -102,6 +118,8 @@ impl From<WsMessageTime> for Duration {
             WsMessageTime::Second(s) => s,
             WsMessageTime::Minute(m) => 60 * m,
             WsMessageTime::Hour(h) => 60 * 60 * h,
+            WsMessageTime::Sent(_) => 1,
+            WsMessageTime::Recived(_) => 1,
         };
 
         Duration::from_secs(seconds.try_into().unwrap())
@@ -254,7 +272,7 @@ impl Configuration {
         &mut self,
         resource: &str,
         method: &RouteMethod,
-        ) -> Option<&mut Route> {
+    ) -> Option<&mut Route> {
         let matching_routes = self
             .routes
             .iter_mut()
@@ -269,7 +287,7 @@ impl Configuration {
         &mut self,
         path: &str,
         method: &RouteMethod,
-        ) -> Option<&mut Route> {
+    ) -> Option<&mut Route> {
         let matching_routes = self
             .routes
             .iter_mut()
@@ -310,7 +328,7 @@ pub fn get_route<'a>(
     routes: &'a [Route],
     uri: &'a Uri,
     method: &RouteMethod,
-    ) -> (Option<&'a Route>, Option<&'a str>) {
+) -> (Option<&'a Route>, Option<&'a str>) {
     for i in routes.iter() {
         if i.method.eq(method) {
             let index = &i.path.find("$$$");
@@ -497,44 +515,44 @@ mod tests {
             get_route(
                 &routes,
                 &"http://localhost:8080/api/test/1/abc.json"
-                .parse::<Uri>()
-                .unwrap(),
+                    .parse::<Uri>()
+                    .unwrap(),
                 &RouteMethod::GET
-                )
+            )
             .0
             .unwrap()
             .resource.as_ref()
             .unwrap(),
             "db/api/1/$$$.json"
-            );
+        );
         assert_eq!(
             get_route(
                 &routes,
                 &"http://localhost:8080/api/test/2/abc.json"
-                .parse::<Uri>()
-                .unwrap(),
+                    .parse::<Uri>()
+                    .unwrap(),
                 &RouteMethod::GET
-                )
+            )
             .0
             .unwrap()
             .resource.as_ref()
             .unwrap(),
             "db/api/2/$$$.json"
-            );
+        );
         assert_eq!(
             get_route(
                 &routes,
                 &"http://localhost:8080/api/test/3/abc.json"
-                .parse::<Uri>()
-                .unwrap(),
+                    .parse::<Uri>()
+                    .unwrap(),
                 &RouteMethod::GET
-                )
+            )
             .0
             .unwrap()
             .resource.as_ref()
             .unwrap(),
             "db/api/3/$$$.json"
-            );
+        );
     }
 
     #[test]
@@ -558,30 +576,30 @@ mod tests {
             get_route(
                 &routes,
                 &"http://localhost:8080/api/test/abc.txt"
-                .parse::<Uri>()
-                .unwrap(),
+                    .parse::<Uri>()
+                    .unwrap(),
                 &RouteMethod::GET
-                )
+            )
             .0
             .unwrap()
             .resource.as_ref()
             .unwrap(),
             "db/api/$$$.txt"
-            );
+        );
         assert_eq!(
             get_route(
                 &routes,
                 &"http://localhost:8080/api/test/abc.json"
-                .parse::<Uri>()
-                .unwrap(),
+                    .parse::<Uri>()
+                    .unwrap(),
                 &RouteMethod::GET
-                )
+            )
             .0
             .unwrap()
             .resource.as_ref()
             .unwrap(),
             "db/api/$$$.json"
-            );
+        );
     }
 
     #[test]
@@ -598,11 +616,11 @@ mod tests {
                 &routes,
                 &"http://localhost:8080/api/test/abc".parse::<Uri>().unwrap(),
                 &RouteMethod::GET
-                )
+            )
             .1
             .unwrap(),
             "abc"
-            );
+        );
     }
 
     #[test]
@@ -618,14 +636,14 @@ mod tests {
             get_route(
                 &routes,
                 &"http://localhost:8080/api/test/abc.txt"
-                .parse::<Uri>()
-                .unwrap(),
+                    .parse::<Uri>()
+                    .unwrap(),
                 &RouteMethod::GET
-                )
+            )
             .1
             .unwrap(),
             "abc"
-            );
+        );
     }
 
     #[test]
@@ -633,23 +651,23 @@ mod tests {
         assert_eq!(
             "3s".parse::<WsMessageTime>().unwrap(),
             WsMessageTime::Second(3)
-            );
+        );
         assert_eq!(
             "3m".parse::<WsMessageTime>().unwrap(),
             WsMessageTime::Minute(3)
-            );
+        );
         assert_eq!(
             "3h".parse::<WsMessageTime>().unwrap(),
             WsMessageTime::Hour(3)
-            );
+        );
         assert_eq!(
             "3sent".parse::<WsMessageTime>().unwrap(),
             WsMessageTime::Sent(3)
-            );
+        );
         assert_eq!(
             "3recived".parse::<WsMessageTime>().unwrap(),
             WsMessageTime::Recived(3)
-            );
+        );
     }
 
     #[test]

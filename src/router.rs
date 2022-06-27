@@ -1,12 +1,13 @@
 //! Returns a respomse to a given request.
-use futures_util::sink::SinkExt;
 use futures_util::StreamExt;
+use futures_util::{sink::SinkExt, stream::FuturesUnordered};
 use rayon::prelude::*;
-use std::{convert::Infallible, net::SocketAddr, sync::Arc};
+use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 
 use hyper::{
     service::{make_service_fn, service_fn},
-    Body, Request, Response, Server, upgrade::Upgraded,
+    upgrade::Upgraded,
+    Body, Request, Response, Server,
 };
 use hyper_tungstenite::{tungstenite::Message, HyperWebsocket, WebSocketStream};
 use tokio::sync::Mutex;
@@ -140,7 +141,9 @@ async fn endpoint_ws(
     {
         let mut websocket = websocket.await?;
 
-        let startup_files: Vec<Vec<u8>> = route
+        let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+
+        let startup_messges: Vec<Vec<u8>> = route
             .messages
             .par_iter()
             .filter(|c| c.kind == WsMessageType::Startup)
@@ -149,15 +152,52 @@ async fn endpoint_ws(
             .map(|c| c.unwrap())
             .collect();
 
-        for c in startup_files {
+        for c in startup_messges {
             match std::str::from_utf8(&c) {
-                Ok(m) => websocket.send(Message::text(m)).await?,
-                Err(_) => websocket.send(Message::binary(c)).await?,
+                Ok(m) => tx.send(Message::text(m)).await?,
+                Err(_) => tx.send(Message::binary(c)).await?,
             };
         }
+        let after_messages: Vec<(Duration, Vec<u8>)> = route
+            .messages
+            .par_iter()
+            .filter(|c| c.kind == WsMessageType::After)
+            .map(|c| (c.get_time(), data_loader::file_sync(c.location.as_str())))
+            .filter(|c| c.0.is_some() && c.1.is_ok())
+            .map(|c| (c.0.unwrap(), c.1.unwrap()))
+            .collect();
 
-        log::trace!("[WS] sent some messages");
-        while let Some(_message) = websocket.next().await {}
+        let mut tasks = FuturesUnordered::new();
+
+        //tasks.push(tokio::task::spawn(async move {
+            //while let Some(_message) = websocket.next().await {}
+        //}));
+
+        for m in after_messages {
+            let tx = tx.clone();
+            tasks.push(tokio::task::spawn(async move {
+                tokio::time::sleep(m.0).await;
+
+                let msg = m.1;
+
+                match std::str::from_utf8(&msg) {
+                    Ok(m) => tx.send(Message::text(m)).await.unwrap(),
+                    Err(_) => tx.send(Message::binary(msg.clone())).await.unwrap(),
+                }
+            }));
+        }
+
+        tasks.push(tokio::task::spawn(async move {
+            while let Some(message) = rx.recv().await {
+                match websocket.send(message).await {
+                    Ok(_) => log::trace!("Sent message"),
+                    Err(_) => log::error!("Failed to send message"),
+                }
+            }
+        }));
+
+        // execute all tasks
+        while let Some(_) = tasks.next().await {}
     } else {
         if config.build_mode == Some(BuildMode::Write) {
             if let Some(remote) = &config.remote {
