@@ -127,13 +127,11 @@ pub async fn build_ws(
     let start = Instant::now();
     let dur = Duration::from_secs(5);
     while start.elapsed() < dur {
-        log::trace!("{:#?} < {:#?} = {:#?}", start.elapsed(), dur, start.elapsed() < dur);
         if let Some(Ok(message)) = websocket.next().await {
             let differece = start.elapsed();
             let offset = differece.as_secs();
             match message {
                 Message::Text(msg) => {
-                    log::trace!("[WS] Received text message: {}", msg);
                     let message = WsClientMessage {
                         offset,
                         content: msg.as_bytes().to_vec(),
@@ -142,7 +140,6 @@ pub async fn build_ws(
                     client_messages.push(message);
                 }
                 Message::Binary(msg) => {
-                    log::trace!("[WS] Received binary message: {:02X?}", msg);
                     let message = WsClientMessage {
                         offset,
                         content: msg,
@@ -150,37 +147,20 @@ pub async fn build_ws(
                     };
                     client_messages.push(message);
                 }
-                Message::Ping(msg) => {
-                    // No need to send a reply: tungstenite takes care of this for you.
-                    log::trace!("[WS] Received ping message: {:02X?}", msg);
-                }
-                Message::Pong(msg) => {
-                    log::trace!("[WS] Received pong message: {:02X?}", msg);
-                }
+                Message::Ping(msg) => {}
+                Message::Pong(msg) => {}
                 Message::Close(msg) => {
-                    // No need to send a reply: tungstenite takes care of this for you.
-                    if let Some(msg) = &msg {
-                        println!(
-                            "Received close message with code {} and message: {}",
-                            msg.code, msg.reason
-                        );
-                    } else {
-                        log::trace!("[WS] Received close message");
-                    }
-
                     break;
                 }
-                Message::Frame(msg) => {
-                    log::trace!("[WS] Received pong message: {:02X?}", msg);
-                }
+                Message::Frame(msg) => {}
             }
         }
     }
 
-    log::info!("The messages: {:?}", client_messages);
+    log::info!("The messages: {:?}", client_messages.len());
 
-    if websocket.close(None).await.is_err() {
-        log::error!("Unable to close websocket");
+    if let Err(e) = websocket.close(None).await {
+        log::error!("Unable to close websocket, {:#?}", e);
     }
 
     let messages = request::ws::fetch_ws(
@@ -190,10 +170,7 @@ pub async fn build_ws(
     )
     .await;
 
-    log::trace!("{:#?}", messages);
-
     if let Ok(messages) = messages {
-        log::trace!("messages to save: {:#?}", messages);
         route.messages = storage::save_ws_client_message(&path, messages).await;
     }
 

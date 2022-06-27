@@ -6,9 +6,9 @@ use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 
 use hyper::{
     service::{make_service_fn, service_fn},
-    Body, Request, Response, Server,
+    Body, Request, Response, Server, upgrade::Upgraded,
 };
-use hyper_tungstenite::{tungstenite::Message, HyperWebsocket};
+use hyper_tungstenite::{tungstenite::Message, HyperWebsocket, WebSocketStream};
 use tokio::sync::Mutex;
 
 use crate::{
@@ -148,6 +148,7 @@ async fn endpoint_ws(
             .filter(|c| c.is_ok())
             .map(|c| c.unwrap())
             .collect();
+
         for c in startup_files {
             match std::str::from_utf8(&c) {
                 Ok(m) => websocket.send(Message::text(m)).await?,
@@ -160,6 +161,7 @@ async fn endpoint_ws(
     } else {
         if config.build_mode == Some(BuildMode::Write) {
             if let Some(remote) = &config.remote {
+                log::trace!("Start ws build");
                 let route = builder::builder::build_ws(uri, remote.to_owned(), websocket).await;
                 config.routes.push(route);
                 configuration::save_configuration(config.to_owned()).await?;
