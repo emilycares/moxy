@@ -147,12 +147,12 @@ pub async fn build_ws(
                     };
                     client_messages.push(message);
                 }
-                Message::Ping(msg) => {}
-                Message::Pong(msg) => {}
-                Message::Close(msg) => {
+                Message::Ping(_) => {}
+                Message::Pong(_) => {}
+                Message::Close(_) => {
                     break;
                 }
-                Message::Frame(msg) => {}
+                Message::Frame(_) => {}
             }
         }
     }

@@ -95,7 +95,7 @@ fn get_ws_url(url: &str) -> String {
         url.replace_range(..4, "ws");
     }
 
-    return url;
+    url
 }
 
 /// A Message that is sent or recevied on a websocket
@@ -107,5 +107,4 @@ pub struct WsClientMessage {
     pub content: Vec<u8>,
     /// If data is not a string
     pub binary: bool,
-
 }
