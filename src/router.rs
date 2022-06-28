@@ -200,8 +200,10 @@ async fn endpoint_ws(
     } else if config.build_mode == Some(BuildMode::Write) {
         if let Some(remote) = &config.remote {
             log::trace!("Start ws build");
-            let route = builder::builder::build_ws(uri, remote.to_owned(), websocket).await;
-            config.routes.push(route);
+            let route = builder::ws::build_ws(uri, remote.to_owned(), websocket).await;
+            if let Ok(route) = route {
+                config.routes.push(route);
+            }
             configuration::save_configuration(config.to_owned()).await?;
         } else {
             log::info!(

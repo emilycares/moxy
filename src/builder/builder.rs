@@ -1,21 +1,11 @@
-use std::{
-    collections::HashMap,
-    convert::Infallible,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, convert::Infallible, sync::Arc};
 
-use futures_util::StreamExt;
 use hyper::{Body, Response};
-use hyper_tungstenite::tungstenite::Message;
 use tokio::sync::Mutex;
 
-use crate::configuration::{BuildMode, Configuration, Route, RouteMethod};
+use crate::configuration::{BuildMode, Configuration, RouteMethod};
 
-use super::{
-    request::{self, ws::WsClientMessage},
-    storage,
-};
+use super::{request, storage};
 
 /// The data structure that will contain all relevant data. To easily convert a request to a response
 /// without doing a huge workaround.
@@ -101,80 +91,6 @@ pub fn get_response(
     }
 
     Ok(response.body(body).unwrap())
-}
-
-/// generate route for a websocket
-pub async fn build_ws(
-    uri: &hyper::Uri,
-    remote: String,
-    websocket: hyper_tungstenite::HyperWebsocket,
-) -> Route {
-    let path = uri.path().to_string();
-    let mut route = Route {
-        method: RouteMethod::WS,
-        path: path.clone(),
-        resource: None,
-        messages: vec![],
-    };
-
-    let mut client_messages: Vec<WsClientMessage> = vec![];
-
-    let mut websocket = match websocket.await {
-        Ok(w) => w,
-        Err(_) => todo!(),
-    };
-    // record messages from client
-    let start = Instant::now();
-    let dur = Duration::from_secs(50);
-    while start.elapsed() < dur {
-        if let Some(Ok(message)) = websocket.next().await {
-            let differece = start.elapsed();
-            let offset = differece.as_secs();
-            match message {
-                Message::Text(msg) => {
-                    let message = WsClientMessage {
-                        offset,
-                        content: msg.as_bytes().to_vec(),
-                        binary: false,
-                    };
-                    client_messages.push(message);
-                }
-                Message::Binary(msg) => {
-                    let message = WsClientMessage {
-                        offset,
-                        content: msg,
-                        binary: true,
-                    };
-                    client_messages.push(message);
-                }
-                Message::Ping(_) => {}
-                Message::Pong(_) => {}
-                Message::Close(_) => {
-                    break;
-                }
-                Message::Frame(_) => {}
-            }
-        }
-    }
-
-    log::info!("The messages: {:?}", client_messages.len());
-
-    if let Err(e) = websocket.close(None).await {
-        log::error!("Unable to close websocket, {:#?}", e);
-    }
-
-    let messages = request::ws::fetch_ws(
-        &request::util::get_url(uri, &remote),
-        HashMap::new(),
-        client_messages,
-    )
-    .await;
-
-    if let Ok(messages) = messages {
-        route.messages = storage::save_ws_client_message(&path, messages).await;
-    }
-
-    route
 }
 
 #[cfg(test)]

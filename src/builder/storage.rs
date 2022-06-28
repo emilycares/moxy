@@ -9,7 +9,7 @@ use tokio::{
 
 use crate::configuration::{self, Configuration, Route, RouteMethod, WsMessage, WsMessageType};
 
-use super::request::ws::WsClientMessage;
+use super::ws::WsClientMessage;
 
 /// Modifies the configuration and filesystem to add more entryes
 pub async fn save(
