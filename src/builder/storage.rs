@@ -151,7 +151,7 @@ pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) 
 
             let path = get_save_path(path.as_str(), &HashMap::new());
 
-            if message.offset >= 5 {
+            if message.offset <= 5 {
                 (
                     WsMessage {
                         kind: WsMessageType::Startup,

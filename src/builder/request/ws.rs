@@ -27,11 +27,11 @@ pub async fn fetch_ws(
 
                 tokio::select! {
                     a = read_ws_messages(read) => {
-                        log::trace!("Got all messages");
                         messages = a;
+                        log::trace!("Build done read");
                     }
                     _ = send_ws_messages(write, client_messages) => {
-                        log::trace!("Sent all messages");
+                        log::trace!("Build done send");
                     }
                 }
 
@@ -57,14 +57,15 @@ async fn send_ws_messages(
         let content = m.content;
         let message = match m.binary {
             true => Message::Binary(content),
-            false => Message::Text(std::str::from_utf8(&content).unwrap().to_owned())
+            false => Message::Text(std::str::from_utf8(&content).unwrap().to_owned()),
         };
         match write.send(message).await {
             Ok(_data) => log::trace!("[WS] sent message to server"),
             Err(_) => log::trace!("[WS] Unable to send data to server"),
         }
     }
-    sleep(Duration::from_secs(500)).await;
+    log::trace!("Sent all messages");
+    sleep(Duration::from_secs(60)).await;
 }
 
 async fn read_ws_messages(
@@ -85,6 +86,7 @@ async fn read_ws_messages(
             });
         }
     }
+    log::trace!("Got all messages");
 
     messages
 }
