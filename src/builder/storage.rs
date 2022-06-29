@@ -9,7 +9,7 @@ use tokio::{
 
 use crate::configuration::{self, Configuration, Route, RouteMethod, WsMessage, WsMessageType};
 
-use super::request::ws::WsClientMessage;
+use super::ws::WsClientMessage;
 
 /// Modifies the configuration and filesystem to add more entryes
 pub async fn save(
@@ -128,6 +128,7 @@ fn get_folders_to_check(folders: &str) -> Vec<String> {
 
 /// Save websocket mesages on the file system
 pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) -> Vec<WsMessage> {
+    log::trace!("save: {:?}", messages);
     let messages: Vec<(WsMessage, Vec<u8>)> = messages
         .iter()
         .enumerate()

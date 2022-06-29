@@ -3,6 +3,8 @@
 
 /// This contains the main builder functionality. That is called by the router.
 pub mod builder;
+/// This contains the main builder functionality for ws.
+pub mod ws;
 /// This contains the logic off feching new data.
 pub mod request;
 /// This contains how new data is saved.

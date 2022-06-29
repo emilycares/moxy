@@ -7,6 +7,11 @@ pub fn get_url(uri: &Uri, host: &String) -> String {
     host.to_owned() + &uri.to_string()
 }
 
+/// Get url with the new host
+pub fn get_url_str(uri: &str, host: &String) -> String {
+    host.to_owned() + &uri
+}
+
 /// Convert HashMap to HeaderMap
 pub fn hash_map_to_header_map(map: HashMap<String, String>) -> HeaderMap {
     let keys = map.keys();
