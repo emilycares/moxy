@@ -1,6 +1,8 @@
 //! Returns a respomse to a given request.
 use futures_util::StreamExt;
 use futures_util::{sink::SinkExt, stream::FuturesUnordered};
+use hyper::upgrade::Upgraded;
+use hyper_tungstenite::WebSocketStream;
 use rayon::prelude::*;
 use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 
@@ -132,15 +134,16 @@ type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 async fn endpoint_ws(
     uri: &hyper::Uri,
     websocket: HyperWebsocket,
-    config: Arc<Mutex<Configuration>>,
+    config_a: Arc<Mutex<Configuration>>,
 ) -> Result<(), Error> {
+    let config = config_a.clone();
     let mut config = config.lock().await.to_owned();
     if let (Some(route), _parameter) =
         configuration::get_route(&config.routes, uri, &RouteMethod::WS)
     {
-        let mut websocket = websocket.await?;
+        let websocket = websocket.await?;
 
-        let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+        let (tx, rx) = tokio::sync::mpsc::channel(32);
 
         let startup_messges: Vec<Vec<u8>> = route
             .messages
@@ -172,9 +175,9 @@ async fn endpoint_ws(
         //while let Some(_message) = websocket.next().await {}
         //}));
 
-        for m in after_messages {
-            let tx = tx.clone();
-            tasks.push(tokio::task::spawn(async move {
+        tasks.push(tokio::task::spawn(async move {
+            for m in after_messages {
+                let tx = tx.clone();
                 tokio::time::sleep(m.0).await;
 
                 let msg = m.1;
@@ -183,16 +186,11 @@ async fn endpoint_ws(
                     Ok(m) => tx.send(Message::text(m)).await.unwrap(),
                     Err(_) => tx.send(Message::binary(msg.clone())).await.unwrap(),
                 }
-            }));
-        }
+            }
+        }));
 
         tasks.push(tokio::task::spawn(async move {
-            while let Some(message) = rx.recv().await {
-                match websocket.send(message).await {
-                    Ok(_) => log::trace!("Sent message"),
-                    Err(_) => log::error!("Failed to send message"),
-                }
-            }
+            send_ws_messages(rx, websocket).await
         }));
 
         // execute all tasks
@@ -219,4 +217,16 @@ async fn endpoint_ws(
     }
 
     Ok(())
+}
+
+async fn send_ws_messages(
+    mut rx: tokio::sync::mpsc::Receiver<Message>,
+    mut websocket: WebSocketStream<Upgraded>,
+) {
+    while let Some(message) = rx.recv().await {
+        match websocket.send(message).await {
+            Ok(_) => log::trace!("Sent message"),
+            Err(_) => log::error!("Failed to send message"),
+        }
+    }
 }
