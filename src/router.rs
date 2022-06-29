@@ -171,13 +171,9 @@ async fn endpoint_ws(
 
         let mut tasks = FuturesUnordered::new();
 
-        //tasks.push(tokio::task::spawn(async move {
-        //while let Some(_message) = websocket.next().await {}
-        //}));
-
-        tasks.push(tokio::task::spawn(async move {
-            for m in after_messages {
-                let tx = tx.clone();
+        for m in after_messages {
+            let tx = tx.clone();
+            tasks.push(tokio::task::spawn(async move {
                 tokio::time::sleep(m.0).await;
 
                 let msg = m.1;
@@ -186,8 +182,8 @@ async fn endpoint_ws(
                     Ok(m) => tx.send(Message::text(m)).await.unwrap(),
                     Err(_) => tx.send(Message::binary(msg.clone())).await.unwrap(),
                 }
-            }
-        }));
+            }));
+        }
 
         tasks.push(tokio::task::spawn(async move {
             send_ws_messages(rx, websocket).await
