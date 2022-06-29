@@ -1,13 +1,24 @@
-use std::{sync::Arc, time::{Instant, Duration}};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-use futures_util::{stream::{FuturesUnordered, SplitSink, SplitStream}, StreamExt, lock::Mutex, SinkExt, pin_mut};
+use futures_util::{
+    lock::Mutex,
+    pin_mut,
+    stream::{FuturesUnordered, SplitSink, SplitStream},
+    SinkExt, StreamExt,
+};
 use hyper::upgrade::Upgraded;
-use hyper_tungstenite::{WebSocketStream, tungstenite::Message};
+use hyper_tungstenite::{tungstenite::Message, WebSocketStream};
 use reqwest::Url;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, MaybeTlsStream};
 
-use crate::{configuration::{Route, RouteMethod}, builder::request};
+use crate::{
+    builder::request,
+    configuration::{Route, RouteMethod},
+};
 
 use super::storage;
 
@@ -32,15 +43,13 @@ pub async fn build_ws(
         Ok(w) => w,
         Err(_) => todo!(),
     };
-    // record messages from client
-    let start = Instant::now();
-    let dur = Duration::from_secs(50);
+    let dur = Duration::from_secs(10);
 
     // Contains all user messages
-    let (tx_u, rx_u) = tokio::sync::broadcast::channel(32);
-    let mut rx_u2 = tx_u.subscribe();
+    let (tx_u, rx_u) = tokio::sync::mpsc::channel(32);
     // Contains all remote messages
-    let (tx_r, rx_r) = tokio::sync::mpsc::channel(32);
+    let (tx_r, rx_r) = tokio::sync::broadcast::channel(32);
+    let mut rx_r2 = tx_r.subscribe();
 
     let mut tasks = FuturesUnordered::new();
 
@@ -50,7 +59,7 @@ pub async fn build_ws(
         log::trace!("connect user");
 
         tokio::select! {
-            _ = read_ws_client(read, tx_r) => {},
+            _ = read_ws_client(read, tx_u) => {},
             _ = send_ws_client(write, rx_r) => {}
         }
     }));
@@ -69,7 +78,7 @@ pub async fn build_ws(
                     let (write, read) = socket.split();
 
                     tokio::select! {
-                        _ = read_ws_remote(read, tx_u) => {
+                        _ = read_ws_remote(read, tx_r) => {
                             log::trace!("Build done read");
                         }
                         _ = send_ws_remote(write, rx_u) => {
@@ -90,9 +99,10 @@ pub async fn build_ws(
     tasks.push(tokio::task::spawn(async move {
         log::trace!("Save messages");
         let start = Instant::now();
-        while let Ok(message) = rx_u2.recv().await {
-            let mut messages = remote_messages2.lock().await.to_owned();
+        let remote_messages2 = remote_messages2.clone();
+        while let Ok(message) = rx_r2.recv().await {
             let offset = start.elapsed().as_secs();
+            let mut messages = remote_messages2.lock().await;
             messages.push(WsClientMessage::from(message.clone(), offset));
             //tx_u.send(message);
         }
@@ -102,16 +112,18 @@ pub async fn build_ws(
     pin_mut!(pull);
 
     if let Err(_) = tokio::time::timeout(dur, &mut pull).await {
-        println!("Taking more than two seconds");
-        pull.await;
+        println!("Taking more than ");
+        tasks.iter().for_each(|t| t.abort())
     }
+
+    log::trace!("Tasks done");
 
     //// execute all tasks
     //while (tasks.next().await).is_some() {
-        //if start.elapsed() > dur {
-            //log::trace!("[WS] Done");
-            //break;
-        //}
+    //if start.elapsed() > dur {
+    //log::trace!("[WS] Done");
+    //break;
+    //}
     //}
 
     let messages = remote_messages.lock().await.to_owned();
@@ -123,9 +135,9 @@ pub async fn build_ws(
 /// Send rx to remote
 pub async fn send_ws_remote(
     mut write: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
-    mut rx: tokio::sync::broadcast::Receiver<Message>,
+    mut rx: tokio::sync::mpsc::Receiver<Message>,
 ) {
-    while let Ok(message) = rx.recv().await {
+    while let Some(message) = rx.recv().await {
         match write.send(message).await {
             Ok(_data) => log::trace!("[WS] sent message to server"),
             Err(_) => log::trace!("[WS] Unable to send data to server"),
@@ -141,8 +153,8 @@ pub async fn read_ws_remote(
 ) {
     while let Some(Ok(message)) = read.next().await {
         match tx.send(message) {
-            Ok(_) => todo!(),
-            Err(_) => todo!(),
+            Ok(_) => log::trace!("Sent message to remote"),
+            Err(_) => log::error!("Unable to send message to remote"),
         }
     }
 }
@@ -163,9 +175,9 @@ pub async fn read_ws_client(
 /// write rx to user input
 pub async fn send_ws_client(
     mut write: SplitSink<WebSocketStream<Upgraded>, Message>,
-    mut rx: tokio::sync::mpsc::Receiver<Message>,
+    mut rx: tokio::sync::broadcast::Receiver<Message>,
 ) {
-    while let Some(message) = rx.recv().await {
+    while let Ok(message) = rx.recv().await {
         match write.send(message).await {
             Ok(_data) => log::trace!("[WS] sent message to client"),
             Err(_) => log::trace!("[WS] Unable to send data to client"),
