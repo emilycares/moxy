@@ -87,7 +87,7 @@ async fn endpoint(
             }
 
             if config.build_mode == Some(BuildMode::Write) {
-                builder::builder::build_response(config_a, uri, method).await
+                builder::core::build_response(config_a, uri, method).await
             } else {
                 log::error!("Will build new route for missing file");
                 let response = Response::builder().status(404).body(Body::empty()).unwrap();
@@ -95,7 +95,7 @@ async fn endpoint(
             }
         }
     } else if config.build_mode == Some(BuildMode::Write) {
-        builder::builder::build_response(config_a, uri, method).await
+        builder::core::build_response(config_a, uri, method).await
     } else {
         log::info!("Resource not found and build mode disabled");
         let response = Response::builder().status(404).body(Body::empty()).unwrap();

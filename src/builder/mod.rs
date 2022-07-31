@@ -2,7 +2,7 @@
 //! `"build_mode": "write"`
 
 /// This contains the main builder functionality. That is called by the router.
-pub mod builder;
+pub mod core;
 /// This contains the main builder functionality for ws.
 pub mod ws;
 /// This contains the logic off feching new data.

@@ -9,7 +9,7 @@ pub fn get_url(uri: &Uri, host: &String) -> String {
 
 /// Get url with the new host
 pub fn get_url_str(uri: &str, host: &String) -> String {
-    host.to_owned() + &uri
+    host.to_owned() + uri
 }
 
 /// Convert HashMap to HeaderMap

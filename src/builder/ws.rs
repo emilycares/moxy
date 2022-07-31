@@ -111,7 +111,7 @@ pub async fn build_ws(
     let pull = tasks.next();
     pin_mut!(pull);
 
-    if let Err(_) = tokio::time::timeout(dur, &mut pull).await {
+    if tokio::time::timeout(dur, &mut pull).await.is_err() {
         println!("Taking more than ");
         tasks.iter().for_each(|t| t.abort())
     }
