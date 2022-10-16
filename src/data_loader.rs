@@ -12,7 +12,7 @@ pub async fn load(route: &Route, parameter: Option<&str>) -> Option<Vec<u8>> {
         } {
             Ok(data) => Some(data.to_vec()),
             Err(_) => None,
-        }
+        };
     }
 
     None
@@ -20,7 +20,7 @@ pub async fn load(route: &Route, parameter: Option<&str>) -> Option<Vec<u8>> {
 
 /// Load file for route.
 pub async fn file(resource: &str) -> Result<Vec<u8>, std::io::Error> {
-    log::trace!("Load File: {}", resource);
+    tracing::trace!("Load File: {}", resource);
     match tokio::fs::read(&resource).await {
         Ok(data) => Ok(data),
         Err(e) => Err(e),
@@ -29,9 +29,6 @@ pub async fn file(resource: &str) -> Result<Vec<u8>, std::io::Error> {
 
 /// Load file for route.
 pub fn file_sync(resource: &str) -> Result<Vec<u8>, std::io::Error> {
-    log::trace!("Load File: {}", resource);
-    match std::fs::read(&resource) {
-        Ok(data) => Ok(data),
-        Err(e) => Err(e),
-    }
+    tracing::trace!("Load File: {}", resource);
+    std::fs::read(&resource)
 }

@@ -61,18 +61,18 @@ pub async fn build_response(
                     }
                 }
                 None => {
-                    log::error!("No response from endpoint");
+                    tracing::error!("No response from endpoint");
                     let response = Response::builder().status(404).body(Body::empty()).unwrap();
                     Ok(response)
                 }
             }
         } else {
-            log::error!("Resource not found and no remove specified");
+            tracing::error!("Resource not found and no remove specified");
             let response = Response::builder().status(404).body(Body::empty()).unwrap();
             Ok(response)
         }
     } else {
-        log::info!("Resource not found and build mode disabled");
+        tracing::info!("Resource not found and build mode disabled");
         let response = Response::builder().status(404).body(Body::empty()).unwrap();
         Ok(response)
     }

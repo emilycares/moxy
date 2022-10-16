@@ -22,7 +22,7 @@ use crate::{
 /// Start webserver using hyper
 pub async fn start() {
     let mut config = configuration::get_configuration().await;
-    log::trace!("Config: {:?}", config);
+    tracing::trace!("Config: {:?}", config);
     if config.host == None {
         config.host = Some("127.0.0.1:8080".to_string());
     }
@@ -42,15 +42,15 @@ pub async fn start() {
             }
         });
 
-        log::info!("Starting http server");
+        tracing::info!("Starting http server");
         let server = Server::bind(&addr).serve(make_service);
 
         // Run this server for... forever!
         if let Err(e) = server.await {
-            log::error!("server error: {}", e);
+            tracing::error!("server error: {}", e);
         }
     } else {
-        log::error!("Unable to start application with an invalid host");
+        tracing::error!("Unable to start application with an invalid host");
     }
 }
 
@@ -60,7 +60,7 @@ async fn endpoint(
     uri: &hyper::Uri,
     method: &hyper::Method,
 ) -> Result<Response<Body>, Infallible> {
-    log::info!("{}", uri);
+    tracing::info!("{}", uri);
     let configc = config_a.clone();
     let mut config = configc.lock().await.to_owned();
     let (route, parameter) =
@@ -82,14 +82,14 @@ async fn endpoint(
             Ok(response)
         } else {
             if let Some(x) = config.routes.iter().position(|c| c == route) {
-                log::info!("Remove route because the file does not exist: {:?}", route);
+                tracing::info!("Remove route because the file does not exist: {:?}", route);
                 config.routes.remove(x);
             }
 
             if config.build_mode == Some(BuildMode::Write) {
                 builder::core::build_response(config_a, uri, method).await
             } else {
-                log::error!("Will build new route for missing file");
+                tracing::error!("Will build new route for missing file");
                 let response = Response::builder().status(404).body(Body::empty()).unwrap();
                 Ok(response)
             }
@@ -97,7 +97,7 @@ async fn endpoint(
     } else if config.build_mode == Some(BuildMode::Write) {
         builder::core::build_response(config_a, uri, method).await
     } else {
-        log::info!("Resource not found and build mode disabled");
+        tracing::info!("Resource not found and build mode disabled");
         let response = Response::builder().status(404).body(Body::empty()).unwrap();
         Ok(response)
     }
@@ -114,14 +114,14 @@ async fn check_ws(
             // Spawn a task to handle the websocket connection.
             tokio::spawn(async move {
                 if let Err(e) = endpoint_ws(&uri, websocket, config).await {
-                    log::trace!("[WS] Error in websocket connection: {}", e);
+                    tracing::trace!("[WS] Error in websocket connection: {}", e);
                 }
             });
 
             // Return the response so the spawned future can continue.
             Ok(response)
         } else {
-            log::error!("Unable to upgrade connection");
+            tracing::error!("Unable to upgrade connection");
             let response = Response::builder().status(404).body(Body::empty()).unwrap();
             Ok(response)
         }
@@ -193,20 +193,20 @@ async fn endpoint_ws(
         while (tasks.next().await).is_some() {}
     } else if config.build_mode == Some(BuildMode::Write) {
         if let Some(remote) = &config.remote {
-            log::trace!("Start ws build");
+            tracing::trace!("Start ws build");
             let route = builder::ws::build_ws(uri, remote.to_owned(), websocket).await;
             if let Ok(route) = route {
                 config.routes.push(route);
             }
             configuration::save_configuration(config.to_owned()).await?;
         } else {
-            log::info!(
+            tracing::info!(
                 "There is no configuration for the url: {}, and there is no remote specified",
                 &uri.to_string()
             );
         }
     } else {
-        log::info!(
+        tracing::info!(
             "There is no configuration for the url: {}, and the build_mode is not set to Write",
             &uri.to_string()
         );
@@ -221,8 +221,8 @@ async fn send_ws_messages(
 ) {
     while let Some(message) = rx.recv().await {
         match websocket.send(message).await {
-            Ok(_) => log::trace!("Sent message"),
-            Err(_) => log::error!("Failed to send message"),
+            Ok(_) => tracing::trace!("Sent message"),
+            Err(_) => tracing::error!("Failed to send message"),
         }
     }
 }

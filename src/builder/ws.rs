@@ -56,7 +56,7 @@ pub async fn build_ws(
     // collect user input
     tasks.push(tokio::task::spawn(async move {
         let (write, read) = websocket.split();
-        log::trace!("connect user");
+        tracing::trace!("connect user");
 
         tokio::select! {
             _ = read_ws_client(read, tx_u) => {},
@@ -68,36 +68,36 @@ pub async fn build_ws(
 
     // connect to remote
     tasks.push(tokio::task::spawn(async move {
-        log::trace!("connect to remote");
+        tracing::trace!("connect to remote");
         let url = get_ws_url(&request::util::get_url_str(&uri, &remote));
-        log::trace!("{}", url);
+        tracing::trace!("{}", url);
         if let Ok(url) = Url::parse(&url) {
-            log::trace!("{:?}", url);
+            tracing::trace!("{:?}", url);
             match connect_async(url).await {
                 Ok((socket, _response)) => {
                     let (write, read) = socket.split();
 
                     tokio::select! {
                         _ = read_ws_remote(read, tx_r) => {
-                            log::trace!("Build done read");
+                            tracing::trace!("Build done read");
                         }
                         _ = send_ws_remote(write, rx_u) => {
-                            log::trace!("Build done send");
+                            tracing::trace!("Build done send");
                         }
                     }
                 }
                 Err(e) => {
-                    log::error!("Unable to connect to the websocket: {:#?}", e);
+                    tracing::error!("Unable to connect to the websocket: {:#?}", e);
                 }
             }
         } else {
-            //log::error!("Unable to connect to the websocket: {}", url);
+            //tracing::error!("Unable to connect to the websocket: {}", url);
         }
     }));
     let remote_messages2 = remote_messages.clone();
     // save messages
     tasks.push(tokio::task::spawn(async move {
-        log::trace!("Save messages");
+        tracing::trace!("Save messages");
         let start = Instant::now();
         let remote_messages2 = remote_messages2.clone();
         while let Ok(message) = rx_r2.recv().await {
@@ -116,12 +116,12 @@ pub async fn build_ws(
         tasks.iter().for_each(|t| t.abort())
     }
 
-    log::trace!("Tasks done");
+    tracing::trace!("Tasks done");
 
     //// execute all tasks
     //while (tasks.next().await).is_some() {
     //if start.elapsed() > dur {
-    //log::trace!("[WS] Done");
+    //tracing::trace!("[WS] Done");
     //break;
     //}
     //}
@@ -139,11 +139,11 @@ pub async fn send_ws_remote(
 ) {
     while let Some(message) = rx.recv().await {
         match write.send(message).await {
-            Ok(_data) => log::trace!("[WS] sent message to server"),
-            Err(_) => log::trace!("[WS] Unable to send data to server"),
+            Ok(_data) => tracing::trace!("[WS] sent message to server"),
+            Err(_) => tracing::trace!("[WS] Unable to send data to server"),
         }
     }
-    log::trace!("Sent all messages");
+    tracing::trace!("Sent all messages");
 }
 
 /// Read from remote
@@ -153,8 +153,8 @@ pub async fn read_ws_remote(
 ) {
     while let Some(Ok(message)) = read.next().await {
         match tx.send(message) {
-            Ok(_) => log::trace!("Sent message to remote"),
-            Err(_) => log::error!("Unable to send message to remote"),
+            Ok(_) => tracing::trace!("Sent message to remote"),
+            Err(_) => tracing::error!("Unable to send message to remote"),
         }
     }
 }
@@ -166,8 +166,8 @@ pub async fn read_ws_client(
 ) {
     while let Some(Ok(message)) = read.next().await {
         match tx.send(message).await {
-            Ok(_) => log::trace!("got user input"),
-            Err(_) => log::error!("Unable to process user input"),
+            Ok(_) => tracing::trace!("got user input"),
+            Err(_) => tracing::error!("Unable to process user input"),
         }
     }
 }
@@ -179,11 +179,11 @@ pub async fn send_ws_client(
 ) {
     while let Ok(message) = rx.recv().await {
         match write.send(message).await {
-            Ok(_data) => log::trace!("[WS] sent message to client"),
-            Err(_) => log::trace!("[WS] Unable to send data to client"),
+            Ok(_data) => tracing::trace!("[WS] sent message to client"),
+            Err(_) => tracing::trace!("[WS] Unable to send data to client"),
         }
     }
-    log::trace!("Sent all messages");
+    tracing::trace!("Sent all messages");
 }
 
 /// Change protocol to ws

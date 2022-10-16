@@ -19,7 +19,7 @@ pub async fn save(
     headers: &HashMap<String, String>,
     config: Arc<Mutex<Configuration>>,
 ) -> Result<(), std::io::Error> {
-    let path = get_save_path(uri, headers);
+    let path = get_save_path(uri, headers.get("content-type"));
     let mut config = config.lock().await;
     if config.get_route(&path, method).is_none() {
         let route = Route {
@@ -28,7 +28,7 @@ pub async fn save(
             path: uri.to_owned(),
             messages: vec![],
         };
-        log::info!("Save route: {:?}", route);
+        tracing::info!("Save route: {:?}", route);
 
         config.routes.push(route);
 
@@ -39,7 +39,7 @@ pub async fn save(
                 for (from, to) in resource_changes {
                     if let Some(route) = config.get_route_by_resource_mut(&from.to_owned(), method)
                     {
-                        route.resource = Some(to);
+                        route.resource = Some(to.to_string());
                     }
                 }
             }
@@ -88,7 +88,8 @@ async fn check_existing_file(folders: &str) -> Result<Vec<(String, String)>, std
     Ok(path_changes)
 }
 
-async fn folder_check(folder: &String) -> Result<Option<String>, std::io::Error> {
+
+async fn folder_check(folder: &str) -> Result<Option<String>, std::io::Error> {
     if Path::new(&folder).is_file() {
         let prefious_file = Some(fs::read(&folder).await);
         fs::remove_file(&folder).await?;
@@ -128,29 +129,18 @@ fn get_folders_to_check(folders: &str) -> Vec<String> {
 
 /// Save websocket mesages on the file system
 pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) -> Vec<WsMessage> {
-    log::trace!("save: {:?}", messages);
+    tracing::trace!("save: {:?}", messages);
     let messages: Vec<(WsMessage, Vec<u8>)> = messages
         .iter()
         .enumerate()
         .map(|(i, message)| {
             let mut path = path.to_owned() + "_ws/" + &i.to_string();
 
-            let is_json: bool = {
-                match std::str::from_utf8(&message.content) {
-                    Ok(message) => {
-                        let json: Result<serde_json::Value, serde_json::Error> =
-                            serde_json::from_str(message);
-
-                        json.is_ok()
-                    }
-                    Err(_) => false,
-                }
-            };
-            if is_json {
+            if is_json(&message.content) {
                 path += ".json";
             }
 
-            let path = get_save_path(path.as_str(), &HashMap::new());
+            let path = get_save_path(path.as_str(), None);
 
             if message.offset <= 5 {
                 (
@@ -188,16 +178,27 @@ pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) 
                     Ok(_) => {}
                     Err(e) => return Err(e),
                 }
-                return match save_file(&message.location, content.clone(), folders.as_str()).await {
+                match save_file(&message.location, content.clone(), folders.as_str()).await {
                     Ok(_) => Ok(message.clone()),
                     Err(e) => Err(e),
-                };
+                }
             }),
     )
     .await
     .unwrap();
 
     return messages.iter().map(|(msg, _)| msg.clone()).collect();
+}
+
+fn is_json(message: &[u8]) -> bool {
+    match std::str::from_utf8(message) {
+        Ok(message) => {
+            let json: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(message);
+
+            json.is_ok()
+        }
+        Err(_) => false,
+    }
 }
 
 /// Saves a file to the expected location
@@ -210,11 +211,11 @@ async fn save_file(location: &str, body: Vec<u8>, folder: &str) -> Result<(), st
 }
 
 /// Will generate a file location based on a uri.
-pub fn get_save_path(uri: &str, headers: &HashMap<String, String>) -> String {
+pub fn get_save_path(uri: &str, content_type: Option<&String>) -> String {
     let file_suffix = if uri.ends_with(".txt") || uri.ends_with(".json") {
         Some(&"")
     } else {
-        get_extension(headers.get("content-type"))
+        get_extension(content_type)
     };
     let mut path = "./db".to_owned() + uri;
 
@@ -281,9 +282,7 @@ fn get_folders(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use crate::builder::storage::{get_folders_to_check, get_save_path};
+    use crate::builder::storage::{get_folders_to_check, get_save_path, is_json};
 
     #[test]
     fn get_folders_to_check_should_return_correct_result_1() {
@@ -315,7 +314,7 @@ mod tests {
         let input = "/api/some-service/micmine";
         let expected = "./db/api/some-service/micmine.txt";
 
-        assert_eq!(get_save_path(input, &HashMap::new()), expected);
+        assert_eq!(get_save_path(input, None), expected);
     }
 
     #[test]
@@ -323,20 +322,42 @@ mod tests {
         let input = "/api/some-service/micmine/";
         let expected = "./db/api/some-service/micmine/index.txt";
 
-        assert_eq!(get_save_path(input, &HashMap::new()), expected);
+        assert_eq!(get_save_path(input, None), expected);
     }
 
     #[test]
     fn get_save_path_should_start_with_db() {
-        let path = get_save_path("/index.html", &HashMap::new());
+        let path = get_save_path("/index.html", None);
 
         assert!(&path.starts_with("./db"));
     }
 
     #[test]
     fn get_save_path_should_add_index_if_folder() {
-        let path = get_save_path("/", &HashMap::new());
+        let path = get_save_path("/", None);
 
         assert!(&path.ends_with("/index.txt"));
     }
+
+    #[test]
+    fn is_json_should_detect_json() {
+        let json_data = "{ \"some\": \"data\", \"and_a_number\": 1 }".as_bytes();
+
+        assert!(is_json(json_data));
+    }
+
+    #[test]
+    fn is_json_should_detect_invalid_json() {
+        let json_data = "{ \"some\": \"data\"".as_bytes();
+
+        assert!(!is_json(json_data));
+    }
+
+    #[test]
+    fn is_json_should_detect_invalid_text() {
+        let json_data: &[u8] = &[0, 1];
+
+        assert!(!is_json(json_data));
+    }
+
 }

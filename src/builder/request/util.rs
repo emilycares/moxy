@@ -1,6 +1,9 @@
 use std::{collections::HashMap, str::FromStr};
 
-use hyper::{Uri, HeaderMap, header::{HeaderName, HeaderValue}};
+use hyper::{
+    header::{HeaderName, HeaderValue},
+    HeaderMap, Uri,
+};
 
 /// Get url with the new host
 pub fn get_url(uri: &Uri, host: &String) -> String {
@@ -23,7 +26,6 @@ pub fn hash_map_to_header_map(map: HashMap<String, String>) -> HeaderMap {
             if let Ok(key) = key {
                 let value = HeaderValue::from_str(value.to_owned().as_str());
                 if let Ok(value) = value {
-                    log::info!("Some header");
                     out.insert(key, value);
                 }
             }
@@ -47,4 +49,23 @@ pub fn header_map_to_hash_map(header: &HeaderMap) -> HashMap<String, String> {
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::{header_map_to_hash_map, hash_map_to_header_map};
+
+
+    #[test]
+    fn validate_hashmap_conversion() {
+        let mut hash_map: HashMap<String, String> = HashMap::new();
+
+        hash_map.insert(String::from("a"), String::from("b"));
+        hash_map.insert(String::from("b"), String::from("c"));
+        hash_map.insert(String::from("c"), String::from("d"));
+
+        assert_eq!(header_map_to_hash_map(&hash_map_to_header_map(hash_map.clone())), hash_map)
+    }
 }

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use hyper::body::Bytes;
 use reqwest::Error;
 
-use crate::{configuration::RouteMethod, builder::core::ResourceData};
+use crate::{builder::core::ResourceData, configuration::RouteMethod};
 
 use super::util::{hash_map_to_header_map, header_map_to_hash_map};
 

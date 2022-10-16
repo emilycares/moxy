@@ -11,7 +11,7 @@ use tokio::{
 
 /// This represents one route that can be navigated to
 #[skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Route {
     /// HTTP method
     pub method: RouteMethod,
@@ -28,7 +28,7 @@ pub struct Route {
 
 /// A WS message with controll when it has to be sent
 #[skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct WsMessage {
     /// Type of time
     pub kind: WsMessageType,
@@ -53,7 +53,7 @@ impl WsMessage {
 }
 
 /// Time units
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum WsMessageTime {
     /// 5s
     Second(usize),
@@ -142,17 +142,17 @@ fn parse_time_number(number: &str, padding: usize) -> Result<usize, u8> {
         if let Ok(number) = number.parse::<usize>() {
             Ok(number)
         } else {
-            log::error!("Time is invalid format. Unable to parse number: {number}");
+            tracing::error!("Time is invalid format. Unable to parse number: {number}");
             Err(2)
         }
     } else {
-        log::error!("Time is invalid format. (To short)");
+        tracing::error!("Time is invalid format. (To short)");
         Err(1)
     }
 }
 
 /// Type of time
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum WsMessageType {
     /// When the ws connects
     Startup,
@@ -163,7 +163,7 @@ pub enum WsMessageType {
 }
 
 /// This represents the http method that is used.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum RouteMethod {
     /// HTTP GET
     GET,
@@ -237,7 +237,7 @@ impl From<RouteMethod> for Method {
 }
 
 /// The configuration setting for `build_mode`
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum BuildMode {
     /// This specifies to not modifiy the filesystem or configuraion.
     Read,
@@ -301,7 +301,7 @@ impl Configuration {
 
 /// Loads the configuration from the filesystem.
 pub async fn get_configuration() -> Configuration {
-    load_configuration("./moxy.json".to_string()).await
+    load_configuration("./moxy.json").await
 }
 
 /// Returns the route and an optional parameter.
@@ -361,11 +361,11 @@ pub fn get_route<'a>(
     (None, None)
 }
 
-async fn load_configuration(loaction: String) -> Configuration {
-    log::info!("Load Configuration: {}", loaction);
+async fn load_configuration(loaction: &str) -> Configuration {
+    tracing::info!("Load Configuration: {}", loaction);
     match fs::read_to_string(&loaction).await {
         Ok(data) => serde_json::from_str(&data).unwrap_or_else(|error| {
-            log::error!("Could not load configuration file: {:?}", error);
+            tracing::error!("Could not load configuration file: {:?}", error);
             Configuration {
                 routes: vec![],
                 host: Some(String::from("127.0.0.1:8080")),
