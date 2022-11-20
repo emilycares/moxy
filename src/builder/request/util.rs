@@ -6,13 +6,13 @@ use hyper::{
 };
 
 /// Get url with the new host
-pub fn get_url(uri: &Uri, host: &String) -> String {
-    host.to_owned() + &uri.to_string()
+pub fn get_url(uri: &Uri, host: impl Into<String>) -> String {
+    host.into() + &uri.to_string()
 }
 
 /// Get url with the new host
-pub fn get_url_str(uri: &str, host: &String) -> String {
-    host.to_owned() + uri
+pub fn get_url_str(uri: &str, host: impl Into<String>) -> String {
+    host.into() + uri
 }
 
 /// Convert HashMap to HeaderMap

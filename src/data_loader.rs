@@ -30,5 +30,5 @@ pub async fn file(resource: &str) -> Result<Vec<u8>, std::io::Error> {
 /// Load file for route.
 pub fn file_sync(resource: &str) -> Result<Vec<u8>, std::io::Error> {
     tracing::trace!("Load File: {}", resource);
-    std::fs::read(&resource)
+    std::fs::read(resource)
 }

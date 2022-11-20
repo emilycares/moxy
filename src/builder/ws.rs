@@ -25,7 +25,7 @@ use super::storage;
 /// generate route for a websocket
 pub async fn build_ws(
     uri: &hyper::Uri,
-    remote: String,
+    remote: impl Into<String> + std::marker::Send + 'static,
     websocket: hyper_tungstenite::HyperWebsocket,
 ) -> Result<Route, u8> {
     let path = uri.path().to_string();
@@ -69,7 +69,7 @@ pub async fn build_ws(
     // connect to remote
     tasks.push(tokio::task::spawn(async move {
         tracing::trace!("connect to remote");
-        let url = get_ws_url(&request::util::get_url_str(&uri, &remote));
+        let url = get_ws_url(&request::util::get_url_str(&uri, &remote.into()));
         tracing::trace!("{}", url);
         if let Ok(url) = Url::parse(&url) {
             tracing::trace!("{:?}", url);

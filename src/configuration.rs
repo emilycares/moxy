@@ -250,7 +250,7 @@ pub enum BuildMode {
 pub struct Configuration {
     /// Specifies the port to run the http server.
     pub host: Option<String>,
-    /// This url is called in `BuildMode::Write`
+    /// This url is called when build_mode is set to `BuildMode::Write`
     pub remote: Option<String>,
     /// `BuildMode`
     pub build_mode: Option<BuildMode>,
@@ -299,6 +299,17 @@ impl Configuration {
     }
 }
 
+impl Default for Configuration {
+    fn default() -> Self {
+        Self {
+            routes: vec![],
+            host: Some(String::from("127.0.0.1:8080")),
+            remote: Some(String::from("http://localhost")),
+            build_mode: None,
+        }
+    }
+}
+
 /// Loads the configuration from the filesystem.
 pub async fn get_configuration() -> Configuration {
     load_configuration("./moxy.json").await
@@ -339,7 +350,7 @@ pub fn get_route<'a>(
             if let Some(index) = index {
                 let match_before = &i.path[0..*index];
 
-                if path.starts_with(&match_before) {
+                if path.starts_with(match_before) {
                     if index + 3 != i.path.len() {
                         let match_end = &i.path[index + 3..i.path.len()];
 
@@ -366,27 +377,16 @@ async fn load_configuration(loaction: &str) -> Configuration {
     match fs::read_to_string(&loaction).await {
         Ok(data) => serde_json::from_str(&data).unwrap_or_else(|error| {
             tracing::error!("Could not load configuration file: {:?}", error);
-            Configuration {
-                routes: vec![],
-                host: Some(String::from("127.0.0.1:8080")),
-                remote: Some(String::from("http://localhost")),
-                build_mode: None,
-            }
+            Configuration::default()
         }),
         Err(e) => {
-            let default_configuration = Configuration {
-                routes: vec![],
-                host: Some(String::from("127.0.0.1:8080")),
-                remote: Some(String::from("http://localhost")),
-                build_mode: Some(BuildMode::Write),
-            };
             if e.kind() == ErrorKind::NotFound {
-                save_configuration(default_configuration.clone())
+                save_configuration(Configuration::default())
                     .await
                     .unwrap();
             }
 
-            default_configuration
+            Configuration::default()
         }
     }
 }

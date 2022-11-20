@@ -23,8 +23,8 @@ use crate::{
 pub async fn start() {
     let mut config = configuration::get_configuration().await;
     tracing::trace!("Config: {:?}", config);
-    if config.host == None {
-        config.host = Some("127.0.0.1:8080".to_string());
+    if config.host.is_none() {
+        config.host = Configuration::default().host
     }
     let addr: Result<SocketAddr, _> = config.host.as_ref().unwrap().parse();
 
@@ -42,7 +42,7 @@ pub async fn start() {
             }
         });
 
-        tracing::info!("Starting http server");
+        tracing::info!("Starting http server on http://{addr}");
         let server = Server::bind(&addr).serve(make_service);
 
         // Run this server for... forever!

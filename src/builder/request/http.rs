@@ -10,7 +10,7 @@ use super::util::{hash_map_to_header_map, header_map_to_hash_map};
 /// Load data from external http source
 pub async fn fetch_http(
     method: RouteMethod,
-    url: String,
+    url: impl reqwest::IntoUrl,
     body: Option<String>,
     header: HashMap<String, String>,
 ) -> Option<ResourceData> {
