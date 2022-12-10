@@ -100,8 +100,8 @@ mod tests {
     use crate::{builder::request, configuration::RouteMethod};
 
     #[tokio::test]
-    async fn requrest_no_body() {
-        let _reponse = request::http::fetch_http(
+    async fn request_no_body() {
+        let _response = request::http::fetch_http(
             RouteMethod::GET,
             "http://example.com".to_string(),
             None,

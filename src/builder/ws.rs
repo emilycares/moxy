@@ -196,7 +196,7 @@ pub fn get_ws_url(url: &str) -> String {
     url
 }
 
-/// A Message that is sent or recevied on a websocket
+/// A Message that is sent or received on a websocket
 #[derive(Debug, Clone)]
 pub struct WsClientMessage {
     /// When the message is sent

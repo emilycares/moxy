@@ -127,7 +127,7 @@ fn get_folders_to_check(folders: &str) -> Vec<String> {
     checks
 }
 
-/// Save websocket mesages on the file system
+/// Save websocket messages on the file system
 pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) -> Vec<WsMessage> {
     tracing::trace!("save: {:?}", messages);
     let messages: Vec<(WsMessage, Vec<u8>)> = messages

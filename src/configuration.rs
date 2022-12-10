@@ -1,4 +1,4 @@
-//! This contains the configuraton datastructures and the logic how to read and wirte it.
+//! This contains the configuration datastructures and the logic how to read and write it.
 
 use hyper::{Method, Uri};
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ pub struct Route {
     pub method: RouteMethod,
     /// HTTP uri
     pub path: String,
-    /// File storeage location
+    /// File storage location
     #[serde(default)]
     pub resource: Option<String>,
     /// Data for WS
@@ -26,7 +26,7 @@ pub struct Route {
     pub messages: Vec<WsMessage>,
 }
 
-/// A WS message with controll when it has to be sent
+/// A WS message with control when it has to be sent
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct WsMessage {
@@ -35,7 +35,7 @@ pub struct WsMessage {
     /// This will be contveted to WsMessageTime
     #[serde(default)]
     pub time: Option<String>,
-    /// File storeage location
+    /// File storage location
     pub location: String,
 }
 
@@ -63,8 +63,8 @@ pub enum WsMessageTime {
     Hour(usize),
     /// 5sent ;After x messages sent messages
     Sent(usize),
-    /// 5recived ;After x messages recived messages
-    Recived(usize),
+    /// 5received ;After x messages received messages
+    Received(usize),
 }
 
 impl FromStr for WsMessageTime {
@@ -91,10 +91,10 @@ impl FromStr for WsMessageTime {
             if let Ok(number) = parse_time_number(s, padding) {
                 return Ok(Self::Sent(number));
             }
-        } else if s.ends_with("recived") {
+        } else if s.ends_with("received") {
             let padding = 7;
             if let Ok(number) = parse_time_number(s, padding) {
-                return Ok(Self::Recived(number));
+                return Ok(Self::Received(number));
             }
         }
 
@@ -109,7 +109,7 @@ impl Display for WsMessageTime {
             WsMessageTime::Minute(t) => write!(f, "{}m", t),
             WsMessageTime::Hour(t) => write!(f, "{}h", t),
             WsMessageTime::Sent(t) => write!(f, "{}sent", t),
-            WsMessageTime::Recived(t) => write!(f, "{}recived", t),
+            WsMessageTime::Received(t) => write!(f, "{}received", t),
         }
     }
 }
@@ -121,7 +121,7 @@ impl From<WsMessageTime> for Duration {
             WsMessageTime::Minute(m) => 60 * m,
             WsMessageTime::Hour(h) => 60 * 60 * h,
             WsMessageTime::Sent(_) => 1,
-            WsMessageTime::Recived(_) => 1,
+            WsMessageTime::Received(_) => 1,
         };
 
         Duration::from_secs(seconds.try_into().unwrap())
@@ -130,7 +130,7 @@ impl From<WsMessageTime> for Duration {
 
 /// This will take the number infront of a string
 ///
-/// # Exaples
+/// # Examples
 /// ```
 /// let input = "3sent";
 ///
@@ -239,7 +239,7 @@ impl From<RouteMethod> for Method {
 /// The configuration setting for `build_mode`
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum BuildMode {
-    /// This specifies to not modifiy the filesystem or configuraion.
+    /// This specifies to not modify the filesystem or configuration.
     Read,
     /// This enables to modify the filesystem and configuration when Needed.
     Write,
@@ -328,7 +328,7 @@ pub async fn get_configuration() -> Configuration {
 /// | /d.txt | ./db/d.txt |
 /// | /e.txt | ./db/e.txt |
 ///
-/// In order to ceate configuration for this there would be a configuration entry for every uri.
+/// In order to create configuration for this there would be a configuration entry for every uri.
 /// But this can be simplified.
 /// ``` json
 /// {
@@ -372,9 +372,9 @@ pub fn get_route<'a>(
     (None, None)
 }
 
-async fn load_configuration(loaction: &str) -> Configuration {
-    tracing::info!("Load Configuration: {}", loaction);
-    match fs::read_to_string(&loaction).await {
+async fn load_configuration(location: &str) -> Configuration {
+    tracing::info!("Load Configuration: {}", location);
+    match fs::read_to_string(&location).await {
         Ok(data) => serde_json::from_str(&data).unwrap_or_else(|error| {
             tracing::error!("Could not load configuration file: {:?}", error);
             Configuration::default()
@@ -672,13 +672,13 @@ mod tests {
             WsMessageTime::Sent(3)
         );
         assert_eq!(
-            "3recived".parse::<WsMessageTime>().unwrap(),
-            WsMessageTime::Recived(3)
+            "3received".parse::<WsMessageTime>().unwrap(),
+            WsMessageTime::Received(3)
         );
     }
 
     #[test]
-    fn get_route_should_not_find_entry_if_the_url_only_partialy_matches() {
+    fn get_route_should_not_find_entry_if_the_url_only_partially_matches() {
         let routes = [Route {
             method: RouteMethod::GET,
             path: "/a".to_string(),

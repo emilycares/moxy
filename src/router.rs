@@ -145,7 +145,7 @@ async fn endpoint_ws(
 
         let (tx, rx) = tokio::sync::mpsc::channel(32);
 
-        let startup_messges: Vec<Vec<u8>> = route
+        let startup_messages: Vec<Vec<u8>> = route
             .messages
             .par_iter()
             .filter(|c| c.kind == WsMessageType::Startup)
@@ -154,7 +154,7 @@ async fn endpoint_ws(
             .map(|c| c.unwrap())
             .collect();
 
-        for c in startup_messges {
+        for c in startup_messages {
             match std::str::from_utf8(&c) {
                 Ok(m) => tx.send(Message::text(m)).await?,
                 Err(_) => tx.send(Message::binary(c)).await?,
