@@ -92,7 +92,7 @@ impl FromStr for WsMessageTime {
                 return Ok(Self::Sent(number));
             }
         } else if s.ends_with("received") {
-            let padding = 7;
+            let padding = 8;
             if let Ok(number) = parse_time_number(s, padding) {
                 return Ok(Self::Received(number));
             }
@@ -317,8 +317,8 @@ pub async fn get_configuration() -> Configuration {
 
 /// Returns the route and an optional parameter.
 ///
-/// The parameter can be used to milify the configuration when there is one dynamic part of the url
-/// and file path.
+/// The parameter can be used to milify the configuration 
+/// when there is one dynamic part of the url and file path.
 ///
 /// | uri    | file       |
 /// |--------|------------|
@@ -328,8 +328,8 @@ pub async fn get_configuration() -> Configuration {
 /// | /d.txt | ./db/d.txt |
 /// | /e.txt | ./db/e.txt |
 ///
-/// In order to create configuration for this there would be a configuration entry for every uri.
-/// But this can be simplified.
+/// In order to create configuration for this there would be a configuration 
+/// entry for every uri. But this can be simplified.
 /// ``` json
 /// {
 ///     "method": "GET",
@@ -381,9 +381,7 @@ async fn load_configuration(location: &str) -> Configuration {
         }),
         Err(e) => {
             if e.kind() == ErrorKind::NotFound {
-                save_configuration(Configuration::default())
-                    .await
-                    .unwrap();
+                save_configuration(Configuration::default()).await.unwrap();
             }
 
             Configuration::default()
