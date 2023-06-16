@@ -1,7 +1,7 @@
 # moxy
-A proxy for developers. That can be used for frontend and backend.
+A web proxy for developers that can be used for frontend and backend.
 
-Its main use case it to cache HTTP requests.
+Its main use case is to cache HTTP requests.
 
 ## Get Started
 1. Build
@@ -10,10 +10,10 @@ Its main use case it to cache HTTP requests.
 4. Change the remote in moxy.json
 
 ## Usecase
-You want to call and API that does not exist or is currently changing, and you 
-are the person that needs to integrate this new/changed API in your software.
+You want to call an API that does not exist or is currently changing, and you 
+are the person that needs to integrate this new/changed API in your software?
 So instead of calling your real backend, you can start moxy in between and call 
-the same routes as before. Moxy will capture all requests and will save them on
+the same routes as before. Moxy will capture all requests and save them to
 the file system. 
 Moxy will only create fetch from the backend once. You can modify the file to 
 change the response. Or add a route in the moxy.json to test your app, like it
