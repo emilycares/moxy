@@ -268,7 +268,7 @@ fn get_extension(content_type: Option<String>) -> Option<String> {
 }
 
 /// convert filetype to content_type
-pub fn get_content_type(file_name: &str) -> String {
+pub fn get_content_type(file_name: String) -> String {
     let guess = mime_guess::from_path(file_name).first();
 
     if let Some(guess) = guess {

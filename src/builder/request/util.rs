@@ -17,8 +17,16 @@ pub fn get_url_str(uri: &str, host: impl Into<String>) -> String {
 
 /// Convert HashMap to HeaderMap
 pub fn hash_map_to_header_map(map: HashMap<String, String>) -> HeaderMap {
-    let keys = map.keys();
     let mut out = HeaderMap::new();
+
+    hash_map_to_mut_header_map(map, &mut out);
+
+    out
+}
+
+/// Convert HashMap to mut HeaderMap
+pub fn hash_map_to_mut_header_map(map: HashMap<String, String>, out: &mut HeaderMap)  {
+    let keys = map.keys();
 
     for key in keys {
         if let Some(value) = map.get(key) {
@@ -31,8 +39,6 @@ pub fn hash_map_to_header_map(map: HashMap<String, String>) -> HeaderMap {
             }
         }
     }
-
-    out
 }
 
 /// Convert Headermap to HashMap

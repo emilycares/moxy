@@ -33,12 +33,21 @@ pub struct Route {
 
 /// Metadata for the response
 #[skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Metadata {
     /// HTTP status code
     pub code: u16,
     /// HTTP headers
     pub headers: HashMap<String, String>,
+}
+
+impl Default for Metadata {
+    fn default() -> Self {
+        Self {
+            code: 200,
+            headers: HashMap::new(),
+        }
+    }
 }
 
 /// A WS message with control when it has to be sent
