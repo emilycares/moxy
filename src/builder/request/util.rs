@@ -55,8 +55,7 @@ pub fn header_map_to_hash_map(header: &HeaderMap) -> HashMap<String, String> {
 mod tests {
     use std::collections::HashMap;
 
-    use super::{header_map_to_hash_map, hash_map_to_header_map};
-
+    use super::{hash_map_to_header_map, header_map_to_hash_map};
 
     #[test]
     fn validate_hashmap_conversion() {
@@ -66,6 +65,9 @@ mod tests {
         hash_map.insert(String::from("b"), String::from("c"));
         hash_map.insert(String::from("c"), String::from("d"));
 
-        assert_eq!(header_map_to_hash_map(&hash_map_to_header_map(hash_map.clone())), hash_map);
+        assert_eq!(
+            header_map_to_hash_map(&hash_map_to_header_map(hash_map.clone())),
+            hash_map
+        );
     }
 }

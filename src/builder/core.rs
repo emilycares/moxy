@@ -62,10 +62,10 @@ pub async fn build_response(
                     get_response(response.headers, response.code, Body::empty())
                 }
             } else {
-                                tracing::error!("No response from endpoint");
-                                let response = Response::builder().status(404).body(Body::empty()).unwrap();
-                                Ok(response)
-                            }
+                tracing::error!("No response from endpoint");
+                let response = Response::builder().status(404).body(Body::empty()).unwrap();
+                Ok(response)
+            }
         } else {
             tracing::error!("Resource not found and no remove specified");
             let response = Response::builder().status(404).body(Body::empty()).unwrap();

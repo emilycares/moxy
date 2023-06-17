@@ -19,7 +19,12 @@ pub async fn save(
     body: Vec<u8>,
     config: Arc<Mutex<Configuration>>,
 ) -> Result<(), std::io::Error> {
-    let content_type: Option<String> = metadata.clone().unwrap_or_default().headers.get("content-type").cloned();
+    let content_type: Option<String> = metadata
+        .clone()
+        .unwrap_or_default()
+        .headers
+        .get("content-type")
+        .cloned();
     let path = get_save_path(uri, content_type);
     let mut config = config.lock().await;
     if config.get_route(&path, method).is_none() {
@@ -89,7 +94,6 @@ async fn check_existing_file(folders: &str) -> Result<Vec<(String, String)>, std
 
     Ok(path_changes)
 }
-
 
 async fn folder_check(folder: &str) -> Result<Option<String>, std::io::Error> {
     if Path::new(&folder).is_file() {
@@ -361,5 +365,4 @@ mod tests {
 
         assert!(!is_json(json_data));
     }
-
 }

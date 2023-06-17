@@ -113,8 +113,8 @@ async fn check_ws(
     let method = &request.method();
     if hyper_tungstenite::is_upgrade_request(&request) {
         if let Ok((response, websocket)) = hyper_tungstenite::upgrade(request, None) {
-                let restponse_status = response.status().as_u16().clone();
-                let response_headers = header_map_to_hash_map(response.headers()).clone();
+            let restponse_status = response.status().as_u16().clone();
+            let response_headers = header_map_to_hash_map(response.headers()).clone();
             // Spawn a task to handle the websocket connection.
             tokio::spawn(async move {
                 if let Err(e) = endpoint_ws(
