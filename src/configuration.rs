@@ -3,7 +3,10 @@
 use hyper::{Method, Uri};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::{convert::TryInto, fmt::Display, io::ErrorKind, str::FromStr, time::Duration};
+use std::{
+    collections::HashMap, convert::TryInto, fmt::Display, io::ErrorKind, str::FromStr,
+    time::Duration,
+};
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
@@ -17,6 +20,8 @@ pub struct Route {
     pub method: RouteMethod,
     /// HTTP uri
     pub path: String,
+    /// Response metadata
+    pub metadata: Option<Metadata>,
     /// File storage location
     #[serde(default)]
     pub resource: Option<String>,
@@ -24,6 +29,16 @@ pub struct Route {
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<WsMessage>,
+}
+
+/// Metadata for the response
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
+pub struct Metadata {
+    /// HTTP status code
+    pub code: u16,
+    /// HTTP headers
+    pub headers: HashMap<String, String>,
 }
 
 /// A WS message with control when it has to be sent
@@ -105,11 +120,11 @@ impl FromStr for WsMessageTime {
 impl Display for WsMessageTime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WsMessageTime::Second(t) => write!(f, "{}s", t),
-            WsMessageTime::Minute(t) => write!(f, "{}m", t),
-            WsMessageTime::Hour(t) => write!(f, "{}h", t),
-            WsMessageTime::Sent(t) => write!(f, "{}sent", t),
-            WsMessageTime::Received(t) => write!(f, "{}received", t),
+            Self::Second(t) => write!(f, "{t}s"),
+            Self::Minute(t) => write!(f, "{t}m"),
+            Self::Hour(t) => write!(f, "{t}h"),
+            Self::Sent(t) => write!(f, "{t}sent"),
+            Self::Received(t) => write!(f, "{t}received"),
         }
     }
 }
@@ -302,10 +317,10 @@ impl Configuration {
 impl Default for Configuration {
     fn default() -> Self {
         Self {
-            routes: vec![],
             host: Some(String::from("127.0.0.1:8080")),
             remote: Some(String::from("http://localhost")),
-            build_mode: None,
+            build_mode: Some(BuildMode::Read),
+            routes: vec![],
         }
     }
 }
@@ -317,7 +332,7 @@ pub async fn get_configuration() -> Configuration {
 
 /// Returns the route and an optional parameter.
 ///
-/// The parameter can be used to milify the configuration 
+/// The parameter can be used to milify the configuration
 /// when there is one dynamic part of the url and file path.
 ///
 /// | uri    | file       |
@@ -328,7 +343,7 @@ pub async fn get_configuration() -> Configuration {
 /// | /d.txt | ./db/d.txt |
 /// | /e.txt | ./db/e.txt |
 ///
-/// In order to create configuration for this there would be a configuration 
+/// In order to create configuration for this there would be a configuration
 /// entry for every uri. But this can be simplified.
 /// ``` json
 /// {
@@ -413,6 +428,7 @@ mod tests {
     fn static_route() {
         let routes = vec![Route {
             method: RouteMethod::GET,
+            metadata: Option::None,
             path: "/api/test".to_string(),
             resource: Some("db/api/test.json".to_string()),
             messages: vec![],
@@ -430,18 +446,21 @@ mod tests {
             routes: vec![
                 Route {
                     method: RouteMethod::GET,
+                    metadata: Option::None,
                     path: "/a".to_string(),
                     resource: Some("somefile.txt".to_string()),
                     messages: vec![],
                 },
                 Route {
                     method: RouteMethod::GET,
+                    metadata: Option::None,
                     path: "/b".to_string(),
                     resource: Some("somefile.txt".to_string()),
                     messages: vec![],
                 },
                 Route {
                     method: RouteMethod::GET,
+                    metadata: Option::None,
                     path: "/c".to_string(),
                     resource: Some("somefile.txt".to_string()),
                     messages: vec![],
@@ -461,18 +480,21 @@ mod tests {
             routes: vec![
                 Route {
                     method: RouteMethod::GET,
+                    metadata: Option::None,
                     path: "/a".to_string(),
                     resource: Some("somefile.txt".to_string()),
                     messages: vec![],
                 },
                 Route {
                     method: RouteMethod::GET,
+                    metadata: Option::None,
                     path: "/b".to_string(),
                     resource: Some("somefile.txt".to_string()),
                     messages: vec![],
                 },
                 Route {
                     method: RouteMethod::GET,
+                    metadata: Option::None,
                     path: "/c".to_string(),
                     resource: Some("somefile.txt".to_string()),
                     messages: vec![],
@@ -493,18 +515,21 @@ mod tests {
         let routes = vec![
             Route {
                 method: RouteMethod::GET,
+                metadata: Option::None,
                 path: "/api/test/1/$$$.json".to_string(),
                 resource: Some("db/api/1/$$$.json".to_string()),
                 messages: vec![],
             },
             Route {
                 method: RouteMethod::GET,
+                metadata: Option::None,
                 path: "/api/test/2/$$$.json".to_string(),
                 resource: Some("db/api/2/$$$.json".to_string()),
                 messages: vec![],
             },
             Route {
                 method: RouteMethod::GET,
+                metadata: Option::None,
                 path: "/api/test/3/$$$.json".to_string(),
                 resource: Some("db/api/3/$$$.json".to_string()),
                 messages: vec![],
@@ -563,12 +588,14 @@ mod tests {
         let routes = vec![
             Route {
                 method: RouteMethod::GET,
+                metadata: Option::None,
                 path: "/api/test/$$$.txt".to_string(),
                 resource: Some("db/api/$$$.txt".to_string()),
                 messages: vec![],
             },
             Route {
                 method: RouteMethod::GET,
+                metadata: Option::None,
                 path: "/api/test/$$$.json".to_string(),
                 resource: Some("db/api/$$$.json".to_string()),
                 messages: vec![],
@@ -611,6 +638,7 @@ mod tests {
     fn dynamic_paramerter_end() {
         let routes = vec![Route {
             method: RouteMethod::GET,
+            metadata: Option::None,
             path: "/api/test/$$$".to_string(),
             resource: Some("db/api/$$$".to_string()),
             messages: vec![],
@@ -632,6 +660,7 @@ mod tests {
     fn dynamic_paramerter_middle() {
         let routes = vec![Route {
             method: RouteMethod::GET,
+            metadata: Option::None,
             path: "/api/test/$$$.txt".to_string(),
             resource: Some("db/api/$$$.txt".to_string()),
             messages: vec![],
@@ -679,6 +708,7 @@ mod tests {
     fn get_route_should_not_find_entry_if_the_url_only_partially_matches() {
         let routes = [Route {
             method: RouteMethod::GET,
+            metadata: Option::None,
             path: "/a".to_string(),
             resource: Some("".to_string()),
             messages: vec![],

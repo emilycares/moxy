@@ -13,6 +13,8 @@ use hyper::{
 use hyper_tungstenite::{tungstenite::Message, HyperWebsocket};
 use tokio::sync::Mutex;
 
+use crate::builder::request::util::header_map_to_hash_map;
+use crate::configuration::Metadata;
 use crate::{
     builder::{self, storage},
     configuration::{self, BuildMode, Configuration, RouteMethod, WsMessageType},
@@ -24,7 +26,7 @@ pub async fn start() {
     let mut config = configuration::get_configuration().await;
     tracing::trace!("Config: {:?}", config);
     if config.host.is_none() {
-        config.host = Configuration::default().host
+        config.host = Configuration::default().host;
     }
     let addr: Result<SocketAddr, _> = config.host.as_ref().unwrap().parse();
 
@@ -111,9 +113,21 @@ async fn check_ws(
     let method = &request.method();
     if hyper_tungstenite::is_upgrade_request(&request) {
         if let Ok((response, websocket)) = hyper_tungstenite::upgrade(request, None) {
+                let restponse_status = response.status().as_u16().clone();
+                let response_headers = header_map_to_hash_map(response.headers()).clone();
             // Spawn a task to handle the websocket connection.
             tokio::spawn(async move {
-                if let Err(e) = endpoint_ws(&uri, websocket, config).await {
+                if let Err(e) = endpoint_ws(
+                    &uri,
+                    Some(Metadata {
+                        code: restponse_status,
+                        headers: response_headers,
+                    }),
+                    websocket,
+                    config,
+                )
+                .await
+                {
                     tracing::trace!("[WS] Error in websocket connection: {}", e);
                 }
             });
@@ -133,6 +147,7 @@ async fn check_ws(
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 async fn endpoint_ws(
     uri: &hyper::Uri,
+    metadata: Option<Metadata>,
     websocket: HyperWebsocket,
     config_a: Arc<Mutex<Configuration>>,
 ) -> Result<(), Error> {
@@ -194,7 +209,7 @@ async fn endpoint_ws(
     } else if config.build_mode == Some(BuildMode::Write) {
         if let Some(remote) = &config.remote {
             tracing::trace!("Start ws build");
-            let route = builder::ws::build_ws(uri, remote.to_owned(), websocket).await;
+            let route = builder::ws::build_ws(uri, metadata, remote.to_owned(), websocket).await;
             if let Ok(route) = route {
                 config.routes.push(route);
             }

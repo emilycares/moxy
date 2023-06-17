@@ -66,6 +66,6 @@ mod tests {
         hash_map.insert(String::from("b"), String::from("c"));
         hash_map.insert(String::from("c"), String::from("d"));
 
-        assert_eq!(header_map_to_hash_map(&hash_map_to_header_map(hash_map.clone())), hash_map)
+        assert_eq!(header_map_to_hash_map(&hash_map_to_header_map(hash_map.clone())), hash_map);
     }
 }

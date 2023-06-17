@@ -1,5 +1,5 @@
 use futures_util::future;
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use tokio::{
     fs::{self, File},
@@ -15,15 +15,17 @@ use super::ws::WsClientMessage;
 pub async fn save(
     method: &RouteMethod,
     uri: &str,
+    metadata: Option<configuration::Metadata>,
     body: Vec<u8>,
-    headers: &HashMap<String, String>,
     config: Arc<Mutex<Configuration>>,
 ) -> Result<(), std::io::Error> {
-    let path = get_save_path(uri, headers.get("content-type"));
+    let content_type: Option<String> = metadata.clone().unwrap_or_default().headers.get("content-type").cloned();
+    let path = get_save_path(uri, content_type);
     let mut config = config.lock().await;
     if config.get_route(&path, method).is_none() {
         let route = Route {
             method: method.clone(),
+            metadata,
             resource: Some(path.clone()),
             path: uri.to_owned(),
             messages: vec![],
@@ -78,7 +80,7 @@ async fn check_existing_file(folders: &str) -> Result<Vec<(String, String)>, std
         match folder_check(&f).await {
             Ok(c) => {
                 if let Some(c) = c {
-                    path_changes.push((f, c))
+                    path_changes.push((f, c));
                 }
             }
             Err(e) => return Err(e),
@@ -97,7 +99,7 @@ async fn folder_check(folder: &str) -> Result<Option<String>, std::io::Error> {
         let path = folder.to_owned() + "/index";
         let mut index_file = File::create(&path).await?;
         if let Some(Ok(prefious_file)) = prefious_file {
-            index_file.write_all(&prefious_file).await?
+            index_file.write_all(&prefious_file).await?;
         }
 
         return Ok(Some(path));
@@ -211,9 +213,9 @@ async fn save_file(location: &str, body: Vec<u8>, folder: &str) -> Result<(), st
 }
 
 /// Will generate a file location based on a uri.
-pub fn get_save_path(uri: &str, content_type: Option<&String>) -> String {
+pub fn get_save_path(uri: &str, content_type: Option<String>) -> String {
     let file_suffix = if uri.ends_with(".txt") || uri.ends_with(".json") {
-        Some(&"")
+        Some(String::new())
     } else {
         get_extension(content_type)
     };
@@ -224,9 +226,9 @@ pub fn get_save_path(uri: &str, content_type: Option<&String>) -> String {
     }
 
     if let Some(file_suffix) = file_suffix {
-        if !path.ends_with(file_suffix) {
+        if !path.ends_with(&file_suffix) {
             path += ".";
-            path += file_suffix;
+            path += &file_suffix;
         }
     } else {
         path += ".txt";
@@ -236,22 +238,22 @@ pub fn get_save_path(uri: &str, content_type: Option<&String>) -> String {
 }
 
 /// convert content_type to filetype
-fn get_extension(content_type: Option<&String>) -> Option<&&str> {
+fn get_extension(content_type: Option<String>) -> Option<String> {
     if let Some(content_type) = content_type {
         let content_type = if content_type.contains(';') {
             if let Some(content_type) = content_type.split(';').next() {
                 content_type
             } else {
-                content_type
+                &content_type
             }
         } else {
-            content_type
+            &content_type
         };
 
         let mime = content_type.parse::<mime::Mime>();
         if mime.is_ok() {
             if let Some(mime) = mime_guess::get_mime_extensions_str(content_type) {
-                return mime.first();
+                return mime.first().map(|a| a.to_string());
             }
         }
 

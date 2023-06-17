@@ -3,7 +3,7 @@ use std::{collections::HashMap, convert::Infallible, sync::Arc};
 use hyper::{Body, Response};
 use tokio::sync::Mutex;
 
-use crate::configuration::{BuildMode, Configuration, RouteMethod};
+use crate::configuration::{BuildMode, Configuration, Metadata, RouteMethod};
 
 use super::{request, storage};
 
@@ -40,32 +40,32 @@ pub async fn build_response(
             )
             .await;
 
-            match response {
-                Some(response) => {
-                    if let Some(body) = response.payload {
-                        if response.code != 404 && build_mode == &BuildMode::Write {
-                            storage::save(
-                                &response.method,
-                                uri.path(),
-                                body.clone(),
-                                &response.headers,
-                                config_a,
-                            )
-                            .await
-                            .unwrap()
-                        }
-
-                        get_response(response.headers, response.code, Body::from(body))
-                    } else {
-                        get_response(response.headers, response.code, Body::empty())
+            if let Some(response) = response {
+                if let Some(body) = response.payload {
+                    if response.code != 404 && build_mode == &BuildMode::Write {
+                        storage::save(
+                            &response.method,
+                            uri.path(),
+                            Some(Metadata {
+                                code: response.code,
+                                headers: response.headers.clone(),
+                            }),
+                            body.clone(),
+                            config_a,
+                        )
+                        .await
+                        .unwrap();
                     }
+
+                    get_response(response.headers, response.code, Body::from(body))
+                } else {
+                    get_response(response.headers, response.code, Body::empty())
                 }
-                None => {
-                    tracing::error!("No response from endpoint");
-                    let response = Response::builder().status(404).body(Body::empty()).unwrap();
-                    Ok(response)
-                }
-            }
+            } else {
+                                tracing::error!("No response from endpoint");
+                                let response = Response::builder().status(404).body(Body::empty()).unwrap();
+                                Ok(response)
+                            }
         } else {
             tracing::error!("Resource not found and no remove specified");
             let response = Response::builder().status(404).body(Body::empty()).unwrap();
