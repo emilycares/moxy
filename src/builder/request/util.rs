@@ -17,8 +17,16 @@ pub fn get_url_str(uri: &str, host: impl Into<String>) -> String {
 
 /// Convert HashMap to HeaderMap
 pub fn hash_map_to_header_map(map: HashMap<String, String>) -> HeaderMap {
-    let keys = map.keys();
     let mut out = HeaderMap::new();
+
+    hash_map_to_mut_header_map(map, &mut out);
+
+    out
+}
+
+/// Convert HashMap to mut HeaderMap
+pub fn hash_map_to_mut_header_map(map: HashMap<String, String>, out: &mut HeaderMap)  {
+    let keys = map.keys();
 
     for key in keys {
         if let Some(value) = map.get(key) {
@@ -31,8 +39,6 @@ pub fn hash_map_to_header_map(map: HashMap<String, String>) -> HeaderMap {
             }
         }
     }
-
-    out
 }
 
 /// Convert Headermap to HashMap
@@ -55,8 +61,7 @@ pub fn header_map_to_hash_map(header: &HeaderMap) -> HashMap<String, String> {
 mod tests {
     use std::collections::HashMap;
 
-    use super::{header_map_to_hash_map, hash_map_to_header_map};
-
+    use super::{hash_map_to_header_map, header_map_to_hash_map};
 
     #[test]
     fn validate_hashmap_conversion() {
@@ -66,6 +71,9 @@ mod tests {
         hash_map.insert(String::from("b"), String::from("c"));
         hash_map.insert(String::from("c"), String::from("d"));
 
-        assert_eq!(header_map_to_hash_map(&hash_map_to_header_map(hash_map.clone())), hash_map)
+        assert_eq!(
+            header_map_to_hash_map(&hash_map_to_header_map(hash_map.clone())),
+            hash_map
+        );
     }
 }

@@ -39,8 +39,5 @@ pub async fn fetch_http(
 
 /// Convert request body to Vec<u8>
 fn get_payload(bytes: Result<Bytes, Error>) -> Option<Vec<u8>> {
-    match bytes {
-        Ok(bytes) => Some(bytes.to_vec()),
-        Err(_) => None,
-    }
+    bytes.map_or(None, |b| Some(b.to_vec()))
 }

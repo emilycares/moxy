@@ -17,7 +17,7 @@ use tokio_tungstenite::{connect_async, MaybeTlsStream};
 
 use crate::{
     builder::request,
-    configuration::{Route, RouteMethod},
+    configuration::{Metadata, Route, RouteMethod},
 };
 
 use super::storage;
@@ -25,12 +25,14 @@ use super::storage;
 /// generate route for a websocket
 pub async fn build_ws(
     uri: &hyper::Uri,
+    metadata: Option<Metadata>,
     remote: impl Into<String> + std::marker::Send + 'static,
     websocket: hyper_tungstenite::HyperWebsocket,
 ) -> Result<Route, u8> {
     let path = uri.path().to_string();
     let mut route = Route {
         method: RouteMethod::WS,
+        metadata,
         path: path.clone(),
         resource: None,
         messages: vec![],
@@ -113,7 +115,7 @@ pub async fn build_ws(
 
     if tokio::time::timeout(dur, &mut pull).await.is_err() {
         println!("Taking more than ");
-        tasks.iter().for_each(|t| t.abort())
+        tasks.iter().for_each(|t| t.abort());
     }
 
     tracing::trace!("Tasks done");
@@ -152,9 +154,10 @@ pub async fn read_ws_remote(
     tx: tokio::sync::broadcast::Sender<Message>,
 ) {
     while let Some(Ok(message)) = read.next().await {
-        match tx.send(message) {
-            Ok(_) => tracing::trace!("Sent message to remote"),
-            Err(_) => tracing::error!("Unable to send message to remote"),
+        if tx.send(message).is_ok() {
+            tracing::trace!("Sent message to remote");
+        } else {
+            tracing::error!("Unable to send message to remote");
         }
     }
 }
@@ -165,9 +168,10 @@ pub async fn read_ws_client(
     tx: tokio::sync::mpsc::Sender<Message>,
 ) {
     while let Some(Ok(message)) = read.next().await {
-        match tx.send(message).await {
-            Ok(_) => tracing::trace!("got user input"),
-            Err(_) => tracing::error!("Unable to process user input"),
+        if let Ok(_) = tx.send(message).await {
+            tracing::trace!("got user input");
+        } else {
+            tracing::error!("Unable to process user input");
         }
     }
 }
@@ -178,9 +182,10 @@ pub async fn send_ws_client(
     mut rx: tokio::sync::broadcast::Receiver<Message>,
 ) {
     while let Ok(message) = rx.recv().await {
-        match write.send(message).await {
-            Ok(_data) => tracing::trace!("[WS] sent message to client"),
-            Err(_) => tracing::trace!("[WS] Unable to send data to client"),
+        if let Ok(_data) = write.send(message).await {
+            tracing::trace!("[WS] sent message to client");
+        } else {
+            tracing::trace!("[WS] Unable to send data to client");
         }
     }
     tracing::trace!("Sent all messages");

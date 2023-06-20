@@ -4,6 +4,7 @@ use futures_util::{sink::SinkExt, stream::FuturesUnordered};
 use hyper::upgrade::Upgraded;
 use hyper_tungstenite::WebSocketStream;
 use rayon::prelude::*;
+use std::collections::HashMap;
 use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 
 use hyper::{
@@ -13,6 +14,8 @@ use hyper::{
 use hyper_tungstenite::{tungstenite::Message, HyperWebsocket};
 use tokio::sync::Mutex;
 
+use crate::builder::request::util::{header_map_to_hash_map, hash_map_to_mut_header_map};
+use crate::configuration::Metadata;
 use crate::{
     builder::{self, storage},
     configuration::{self, BuildMode, Configuration, RouteMethod, WsMessageType},
@@ -24,7 +27,7 @@ pub async fn start() {
     let mut config = configuration::get_configuration().await;
     tracing::trace!("Config: {:?}", config);
     if config.host.is_none() {
-        config.host = Configuration::default().host
+        config.host = Configuration::default().host;
     }
     let addr: Result<SocketAddr, _> = config.host.as_ref().unwrap().parse();
 
@@ -66,41 +69,59 @@ async fn endpoint(
     let (route, parameter) =
         configuration::get_route(&config.routes, uri, &RouteMethod::from(method));
 
-    if let Some(route) = route {
-        let data = data_loader::load(route, parameter);
-        if let Some(data) = data.await {
-            let response = Response::builder()
-                .status(200)
-                .header(
-                    "content-type",
-                    // unwrap is save here because there will never be data without a resource
-                    storage::get_content_type(route.resource.as_ref().unwrap()),
-                )
-                .body(Body::from(data))
-                .unwrap();
-
-            Ok(response)
-        } else {
-            if let Some(x) = config.routes.iter().position(|c| c == route) {
-                tracing::info!("Remove route because the file does not exist: {:?}", route);
-                config.routes.remove(x);
-            }
-
-            if config.build_mode == Some(BuildMode::Write) {
-                builder::core::build_response(config_a, uri, method).await
-            } else {
-                tracing::error!("Will build new route for missing file");
-                let response = Response::builder().status(404).body(Body::empty()).unwrap();
-                Ok(response)
-            }
+    let Some(route) = route else {
+         if config.build_mode == Some(BuildMode::Write) {
+             return builder::core::build_response(config_a, uri, method).await
+         } else {
+             tracing::info!("Resource not found and build mode disabled");
+             let response = Response::builder().status(404).body(Body::empty()).unwrap();
+             return Ok(response);
+         }
+     };
+    let data = data_loader::load(route, parameter);
+    let Some(data) = data.await else {
+        if let Some(x) = config.routes.iter().position(|c| c == route) {
+            tracing::info!("Remove route because the file does not exist: {:?}", route);
+            config.routes.remove(x);
         }
-    } else if config.build_mode == Some(BuildMode::Write) {
-        builder::core::build_response(config_a, uri, method).await
-    } else {
-        tracing::info!("Resource not found and build mode disabled");
-        let response = Response::builder().status(404).body(Body::empty()).unwrap();
-        Ok(response)
-    }
+
+        if config.build_mode == Some(BuildMode::Write) {
+            return builder::core::build_response(config_a, uri, method).await;
+        } else {
+            tracing::error!("Will build new route for missing file");
+            let response = Response::builder().status(404).body(Body::empty()).unwrap();
+            return Ok(response);
+        }
+    };
+    let metadata = route.metadata.to_owned().unwrap_or_default();
+    let mut resp_build = Response::builder()
+        .status(metadata.code)
+        .header(
+            "content-type",
+            get_content_type_with_fallback(metadata.headers.clone(), route.resource.clone()),
+        );
+
+    let mut headers = resp_build.headers_mut().expect("This has just been created");
+    hash_map_to_mut_header_map(metadata.headers, &mut headers);
+        
+    let response = resp_build.body(Body::from(data))
+        .unwrap();
+
+    Ok(response)
+}
+
+fn get_content_type_with_fallback(
+    headers: HashMap<String, String>,
+    resource: Option<String>,
+) -> String {
+    return headers
+        .get("content-type")
+        .map(|c| c.to_owned())
+        .unwrap_or_else(|| {
+            tracing::info!("Guessing content-type based on the file resource. Becaue it was not specified in the headers");
+            return storage::get_content_type(resource
+                                             .expect("save here because there will never be data without a resource",));
+            });
 }
 
 async fn check_ws(
@@ -111,9 +132,21 @@ async fn check_ws(
     let method = &request.method();
     if hyper_tungstenite::is_upgrade_request(&request) {
         if let Ok((response, websocket)) = hyper_tungstenite::upgrade(request, None) {
+            let restponse_status = response.status().as_u16().clone();
+            let response_headers = header_map_to_hash_map(response.headers()).clone();
             // Spawn a task to handle the websocket connection.
             tokio::spawn(async move {
-                if let Err(e) = endpoint_ws(&uri, websocket, config).await {
+                if let Err(e) = endpoint_ws(
+                    &uri,
+                    Some(Metadata {
+                        code: restponse_status,
+                        headers: response_headers,
+                    }),
+                    websocket,
+                    config,
+                )
+                .await
+                {
                     tracing::trace!("[WS] Error in websocket connection: {}", e);
                 }
             });
@@ -133,68 +166,17 @@ async fn check_ws(
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 async fn endpoint_ws(
     uri: &hyper::Uri,
+    metadata: Option<Metadata>,
     websocket: HyperWebsocket,
     config_a: Arc<Mutex<Configuration>>,
 ) -> Result<(), Error> {
     let config = config_a.clone();
     let mut config = config.lock().await.to_owned();
-    if let (Some(route), _parameter) =
-        configuration::get_route(&config.routes, uri, &RouteMethod::WS)
-    {
-        let websocket = websocket.await?;
-
-        let (tx, rx) = tokio::sync::mpsc::channel(32);
-
-        let startup_messages: Vec<Vec<u8>> = route
-            .messages
-            .par_iter()
-            .filter(|c| c.kind == WsMessageType::Startup)
-            .map(|c| data_loader::file_sync(c.location.as_str()))
-            .filter(|c| c.is_ok())
-            .map(|c| c.unwrap())
-            .collect();
-
-        for c in startup_messages {
-            match std::str::from_utf8(&c) {
-                Ok(m) => tx.send(Message::text(m)).await?,
-                Err(_) => tx.send(Message::binary(c)).await?,
-            };
-        }
-        let after_messages: Vec<(Duration, Vec<u8>)> = route
-            .messages
-            .par_iter()
-            .filter(|c| c.kind == WsMessageType::After)
-            .map(|c| (c.get_time(), data_loader::file_sync(c.location.as_str())))
-            .filter(|c| c.0.is_some() && c.1.is_ok())
-            .map(|c| (c.0.unwrap(), c.1.unwrap()))
-            .collect();
-
-        let mut tasks = FuturesUnordered::new();
-
-        for m in after_messages {
-            let tx = tx.clone();
-            tasks.push(tokio::task::spawn(async move {
-                tokio::time::sleep(m.0).await;
-
-                let msg = m.1;
-
-                match std::str::from_utf8(&msg) {
-                    Ok(m) => tx.send(Message::text(m)).await.unwrap(),
-                    Err(_) => tx.send(Message::binary(msg.clone())).await.unwrap(),
-                }
-            }));
-        }
-
-        tasks.push(tokio::task::spawn(async move {
-            send_ws_messages(rx, websocket).await
-        }));
-
-        // execute all tasks
-        while (tasks.next().await).is_some() {}
-    } else if config.build_mode == Some(BuildMode::Write) {
+    let (Some(route), _parameter) = configuration::get_route(&config.routes, uri, &RouteMethod::WS) else {
+      if config.build_mode == Some(BuildMode::Write) {
         if let Some(remote) = &config.remote {
             tracing::trace!("Start ws build");
-            let route = builder::ws::build_ws(uri, remote.to_owned(), websocket).await;
+            let route = builder::ws::build_ws(uri, metadata, remote.to_owned(), websocket).await;
             if let Ok(route) = route {
                 config.routes.push(route);
             }
@@ -205,12 +187,64 @@ async fn endpoint_ws(
                 &uri.to_string()
             );
         }
-    } else {
-        tracing::info!(
+      } else {
+          tracing::info!(
             "There is no configuration for the url: {}, and the build_mode is not set to Write",
             &uri.to_string()
-        );
+          );
+      }
+      return Ok(());
+    };
+    let websocket = websocket.await?;
+
+    let (tx, rx) = tokio::sync::mpsc::channel(32);
+
+    let startup_messages: Vec<Vec<u8>> = route
+        .messages
+        .par_iter()
+        .filter(|c| c.kind == WsMessageType::Startup)
+        .map(|c| data_loader::file_sync(c.location.as_str()))
+        .filter(|c| c.is_ok())
+        .map(|c| c.unwrap())
+        .collect();
+
+    for c in startup_messages {
+        match std::str::from_utf8(&c) {
+            Ok(m) => tx.send(Message::text(m)).await?,
+            Err(_) => tx.send(Message::binary(c)).await?,
+        };
     }
+    let after_messages: Vec<(Duration, Vec<u8>)> = route
+        .messages
+        .par_iter()
+        .filter(|c| c.kind == WsMessageType::After)
+        .map(|c| (c.get_time(), data_loader::file_sync(c.location.as_str())))
+        .filter(|c| c.0.is_some() && c.1.is_ok())
+        .map(|c| (c.0.unwrap(), c.1.unwrap()))
+        .collect();
+
+    let mut tasks = FuturesUnordered::new();
+
+    for m in after_messages {
+        let tx = tx.clone();
+        tasks.push(tokio::task::spawn(async move {
+            tokio::time::sleep(m.0).await;
+
+            let msg = m.1;
+
+            match std::str::from_utf8(&msg) {
+                Ok(m) => tx.send(Message::text(m)).await.unwrap(),
+                Err(_) => tx.send(Message::binary(msg.clone())).await.unwrap(),
+            }
+        }));
+    }
+
+    tasks.push(tokio::task::spawn(async move {
+        send_ws_messages(rx, websocket).await
+    }));
+
+    // execute all tasks
+    while (tasks.next().await).is_some() {}
 
     Ok(())
 }
