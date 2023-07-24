@@ -98,11 +98,11 @@ async fn endpoint(
         .status(metadata.code)
         .header(
             "content-type",
-            get_content_type_with_fallback(metadata.headers.clone(), route.resource.clone()),
+            get_content_type_with_fallback(metadata.header.clone(), route.resource.clone()),
         );
 
     let mut headers = resp_build.headers_mut().expect("This has just been created");
-    hash_map_to_mut_header_map(metadata.headers, &mut headers);
+    hash_map_to_mut_header_map(metadata.header, &mut headers);
         
     let response = resp_build.body(Body::from(data))
         .unwrap();
@@ -140,7 +140,7 @@ async fn check_ws(
                     &uri,
                     Some(Metadata {
                         code: restponse_status,
-                        headers: response_headers,
+                        header: response_headers,
                     }),
                     websocket,
                     config,

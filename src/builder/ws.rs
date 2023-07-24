@@ -9,18 +9,59 @@ use futures_util::{
     stream::{FuturesUnordered, SplitSink, SplitStream},
     SinkExt, StreamExt,
 };
-use hyper::upgrade::Upgraded;
+use hyper::{upgrade::Upgraded, Request, http::HeaderName};
 use hyper_tungstenite::{tungstenite::Message, WebSocketStream};
-use reqwest::Url;
 use tokio::net::TcpStream;
-use tokio_tungstenite::{connect_async, MaybeTlsStream};
+use tokio_tungstenite::{
+    connect_async_tls_with_config, tungstenite::protocol::WebSocketConfig, MaybeTlsStream,
+};
 
 use crate::{
     builder::request,
     configuration::{Metadata, Route, RouteMethod},
 };
 
-use super::storage;
+use super::{request::util::hash_map_to_header_map, storage};
+
+/// A Message that is sent or received on a websocket
+#[derive(Debug, Clone)]
+pub struct WsClientMessage {
+    /// When the message is sent
+    pub offset: u64,
+    /// Message content
+    pub content: Vec<u8>,
+    /// If data is not a string
+    pub binary: bool,
+}
+
+impl WsClientMessage {
+    /// Add from Message
+    pub fn from(message: Message, offset: u64) -> Self {
+        match message {
+            Message::Text(m) => Self {
+                offset,
+                content: m.as_str().as_bytes().to_vec(),
+                binary: false,
+            },
+            Message::Binary(m) => Self {
+                offset,
+                content: m,
+                binary: true,
+            },
+            _ => Self {
+                offset,
+                content: vec![],
+                binary: true,
+            },
+        }
+    }
+}
+
+//impl From<Message> for WsClientMessage {
+//fn from(_: Message) -> Self {
+//todo!()
+//}
+//}
 
 /// generate route for a websocket
 pub async fn build_ws(
@@ -32,7 +73,7 @@ pub async fn build_ws(
     let path = uri.path().to_string();
     let mut route = Route {
         method: RouteMethod::WS,
-        metadata,
+        metadata: metadata.clone(),
         path: path.clone(),
         resource: None,
         messages: vec![],
@@ -72,28 +113,33 @@ pub async fn build_ws(
     tasks.push(tokio::task::spawn(async move {
         tracing::trace!("connect to remote");
         let url = get_ws_url(&request::util::get_url_str(&uri, &remote.into()));
-        tracing::trace!("{}", url);
-        if let Ok(url) = Url::parse(&url) {
-            tracing::trace!("{:?}", url);
-            match connect_async(url).await {
-                Ok((socket, _response)) => {
-                    let (write, read) = socket.split();
+        tracing::trace!("{:?}", url);
+        let request = get_request(url, metadata);
 
-                    tokio::select! {
-                        _ = read_ws_remote(read, tx_r) => {
-                            tracing::trace!("Build done read");
-                        }
-                        _ = send_ws_remote(write, rx_u) => {
-                            tracing::trace!("Build done send");
-                        }
+        match connect_async_tls_with_config(
+            request,
+            Some(WebSocketConfig::default()),
+            true,
+            get_tls_connector(),
+        )
+        .await
+        {
+            //match connect_async(url).await {
+            Ok((socket, _response)) => {
+                let (write, read) = socket.split();
+
+                tokio::select! {
+                    _ = read_ws_remote(read, tx_r) => {
+                        tracing::trace!("Build done read");
+                    }
+                    _ = send_ws_remote(write, rx_u) => {
+                        tracing::trace!("Build done send");
                     }
                 }
-                Err(e) => {
-                    tracing::error!("Unable to connect to the websocket: {:#?}", e);
-                }
             }
-        } else {
-            //tracing::error!("Unable to connect to the websocket: {}", url);
+            Err(e) => {
+                tracing::error!("Unable to connect to the websocket: {:#?}", e);
+            }
         }
     }));
     let remote_messages2 = remote_messages.clone();
@@ -201,42 +247,28 @@ pub fn get_ws_url(url: &str) -> String {
     url
 }
 
-/// A Message that is sent or received on a websocket
-#[derive(Debug, Clone)]
-pub struct WsClientMessage {
-    /// When the message is sent
-    pub offset: u64,
-    /// Message content
-    pub content: Vec<u8>,
-    /// If data is not a string
-    pub binary: bool,
+fn get_tls_connector() -> Option<tokio_tungstenite::Connector> {
+    let Ok(connector) = native_tls::TlsConnector::builder().danger_accept_invalid_certs(true).build() else {
+        tracing::error!("Unable to create tls connector");
+        return None;
+    };
+
+    Some(tokio_tungstenite::Connector::NativeTls(connector))
 }
 
-impl WsClientMessage {
-    /// Add from Message
-    pub fn from(message: Message, offset: u64) -> Self {
-        match message {
-            Message::Text(m) => Self {
-                offset,
-                content: m.as_str().as_bytes().to_vec(),
-                binary: false,
-            },
-            Message::Binary(m) => Self {
-                offset,
-                content: m,
-                binary: true,
-            },
-            _ => Self {
-                offset,
-                content: vec![],
-                binary: true,
-            },
+/// Creates a reuest with the specifed url and header
+fn get_request(url: String, metadata: Option<Metadata>) -> Request<()> {
+    let mut request = Request::builder().method("GET").uri(url);
+
+    if let Some(metadata) = metadata {
+        if let Some(request_header) = request.headers_mut() {
+            for (key, value) in hash_map_to_header_map(metadata.header) {
+                if let Some(key) = key {
+                    request_header.insert::<HeaderName>(key.into(), value);
+                }
+            }
         }
     }
-}
 
-impl From<Message> for WsClientMessage {
-    fn from(_: Message) -> Self {
-        todo!()
-    }
+    request.body(()).unwrap()
 }

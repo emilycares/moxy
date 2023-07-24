@@ -38,14 +38,14 @@ pub struct Metadata {
     /// HTTP status code
     pub code: u16,
     /// HTTP headers
-    pub headers: HashMap<String, String>,
+    pub header: HashMap<String, String>,
 }
 
 impl Default for Metadata {
     fn default() -> Self {
         Self {
             code: 200,
-            headers: HashMap::new(),
+            header: HashMap::new(),
         }
     }
 }

@@ -692,6 +692,7 @@ dependencies = [
  "hyper-tungstenite",
  "mime",
  "mime_guess",
+ "native-tls",
  "rayon",
  "reqwest",
  "serde",

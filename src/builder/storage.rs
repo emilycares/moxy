@@ -22,7 +22,7 @@ pub async fn save(
     let content_type: Option<String> = metadata
         .clone()
         .unwrap_or_default()
-        .headers
+        .header
         .get("content-type")
         .cloned();
     let path = get_save_path(uri, content_type);

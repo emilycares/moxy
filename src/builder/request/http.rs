@@ -14,16 +14,7 @@ pub async fn fetch_http(
     body: Option<String>,
     header: HashMap<String, String>,
 ) -> Option<ResourceData> {
-    let client = reqwest::Client::new();
-    let mut req = client.request(method.to_owned().into(), url);
-
-    req = req.headers(hash_map_to_header_map(header));
-
-    if let Some(body) = body {
-        req = req.body(body);
-    }
-
-    let response = req.send().await;
+    let response = get_request(method.clone(), url, body, header).send().await;
 
     if let Ok(response) = response {
         return Some(ResourceData {
@@ -35,6 +26,28 @@ pub async fn fetch_http(
     }
 
     None
+}
+
+/// Get request to Load data from external http source
+pub fn get_request(
+    method: RouteMethod,
+    url: impl reqwest::IntoUrl,
+    body: Option<String>,
+    header: HashMap<String, String>,
+) -> reqwest::RequestBuilder {
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap_or_default();
+    let mut req = client.request(method.to_owned().into(), url);
+
+    req = req.headers(hash_map_to_header_map(header));
+
+    if let Some(body) = body {
+        req = req.body(body);
+    }
+
+    req
 }
 
 /// Convert request body to Vec<u8>

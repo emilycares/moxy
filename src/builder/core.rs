@@ -48,7 +48,7 @@ pub async fn build_response(
                             uri.path(),
                             Some(Metadata {
                                 code: response.code,
-                                headers: response.headers.clone(),
+                                header: response.headers.clone(),
                             }),
                             body.clone(),
                             config_a,
