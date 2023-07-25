@@ -11,7 +11,7 @@ use super::util::{hash_map_to_header_map, header_map_to_hash_map};
 pub async fn fetch_http(
     method: RouteMethod,
     url: impl reqwest::IntoUrl,
-    body: Option<String>,
+    body: impl Into<reqwest::Body>,
     header: HashMap<String, String>,
 ) -> Option<ResourceData> {
     let response = get_request(method.clone(), url, body, header).send().await;
@@ -32,7 +32,7 @@ pub async fn fetch_http(
 pub fn get_request(
     method: RouteMethod,
     url: impl reqwest::IntoUrl,
-    body: Option<String>,
+    body: impl Into<reqwest::Body>,
     header: HashMap<String, String>,
 ) -> reqwest::RequestBuilder {
     let client = reqwest::Client::builder()
@@ -42,10 +42,7 @@ pub fn get_request(
     let mut req = client.request(method.to_owned().into(), url);
 
     req = req.headers(hash_map_to_header_map(header));
-
-    if let Some(body) = body {
-        req = req.body(body);
-    }
+    req = req.body(body);
 
     req
 }

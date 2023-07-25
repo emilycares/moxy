@@ -14,7 +14,7 @@ use hyper::{
 use hyper_tungstenite::{tungstenite::Message, HyperWebsocket};
 use tokio::sync::Mutex;
 
-use crate::builder::request::util::{header_map_to_hash_map, hash_map_to_mut_header_map};
+use crate::builder::request::util::{hash_map_to_mut_header_map, header_map_to_hash_map};
 use crate::configuration::Metadata;
 use crate::{
     builder::{self, storage},
@@ -61,17 +61,18 @@ pub async fn start() {
 async fn endpoint(
     config_a: Arc<Mutex<Configuration>>,
     uri: &hyper::Uri,
-    method: &hyper::Method,
+    method: hyper::Method,
+    body: hyper::Body,
 ) -> Result<Response<Body>, Infallible> {
     tracing::info!("{}", uri);
     let configc = config_a.clone();
     let mut config = configc.lock().await.to_owned();
     let (route, parameter) =
-        configuration::get_route(&config.routes, uri, &RouteMethod::from(method));
+        configuration::get_route(&config.routes, uri, &RouteMethod::from(method.clone()));
 
     let Some(route) = route else {
          if config.build_mode == Some(BuildMode::Write) {
-             return builder::core::build_response(config_a, uri, method).await
+             return builder::core::build_response(config_a, uri, method, body).await
          } else {
              tracing::info!("Resource not found and build mode disabled");
              let response = Response::builder().status(404).body(Body::empty()).unwrap();
@@ -86,7 +87,7 @@ async fn endpoint(
         }
 
         if config.build_mode == Some(BuildMode::Write) {
-            return builder::core::build_response(config_a, uri, method).await;
+            return builder::core::build_response(config_a, uri, method, body).await;
         } else {
             tracing::error!("Will build new route for missing file");
             let response = Response::builder().status(404).body(Body::empty()).unwrap();
@@ -94,18 +95,17 @@ async fn endpoint(
         }
     };
     let metadata = route.metadata.to_owned().unwrap_or_default();
-    let mut resp_build = Response::builder()
-        .status(metadata.code)
-        .header(
-            "content-type",
-            get_content_type_with_fallback(metadata.header.clone(), route.resource.clone()),
-        );
+    let mut resp_build = Response::builder().status(metadata.code).header(
+        "content-type",
+        get_content_type_with_fallback(metadata.header.clone(), route.resource.clone()),
+    );
 
-    let mut headers = resp_build.headers_mut().expect("This has just been created");
+    let mut headers = resp_build
+        .headers_mut()
+        .expect("This has just been created");
     hash_map_to_mut_header_map(metadata.header, &mut headers);
-        
-    let response = resp_build.body(Body::from(data))
-        .unwrap();
+
+    let response = resp_build.body(Body::from(data)).unwrap();
 
     Ok(response)
 }
@@ -129,7 +129,7 @@ async fn check_ws(
     config: Arc<Mutex<Configuration>>,
 ) -> Result<Response<Body>, Infallible> {
     let uri = request.uri().clone();
-    let method = &request.method();
+    let method = request.method().clone();
     if hyper_tungstenite::is_upgrade_request(&request) {
         if let Ok((response, websocket)) = hyper_tungstenite::upgrade(request, None) {
             let restponse_status = response.status().as_u16().clone();
@@ -159,7 +159,8 @@ async fn check_ws(
             Ok(response)
         }
     } else {
-        endpoint(config, &uri, method).await
+        let body = request.into_body();
+        endpoint(config, &uri, method, body).await
     }
 }
 
