@@ -1,18 +1,16 @@
-use std::collections::HashMap;
-
-use hyper::body::Bytes;
+use hyper::{body::Bytes, HeaderMap};
 use reqwest::Error;
 
 use crate::{builder::core::ResourceData, configuration::RouteMethod};
 
-use super::util::{hash_map_to_header_map, header_map_to_hash_map};
+use super::util::header_map_to_hash_map;
 
 /// Load data from external http source
 pub async fn fetch_http(
     method: RouteMethod,
     url: impl reqwest::IntoUrl,
     body: impl Into<reqwest::Body>,
-    header: HashMap<String, String>,
+    header: HeaderMap
 ) -> Option<ResourceData> {
     let response = get_request(method.clone(), url, body, header).send().await;
 
@@ -33,7 +31,7 @@ pub fn get_request(
     method: RouteMethod,
     url: impl reqwest::IntoUrl,
     body: impl Into<reqwest::Body>,
-    header: HashMap<String, String>,
+    header: HeaderMap,
 ) -> reqwest::RequestBuilder {
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
@@ -41,7 +39,7 @@ pub fn get_request(
         .unwrap_or_default();
     let mut req = client.request(method.to_owned().into(), url);
 
-    req = req.headers(hash_map_to_header_map(header));
+    req = req.headers(header);
     req = req.body(body);
 
     req

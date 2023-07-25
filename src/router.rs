@@ -1,6 +1,7 @@
 //! Returns a respomse to a given request.
 use futures_util::StreamExt;
 use futures_util::{sink::SinkExt, stream::FuturesUnordered};
+use hyper::HeaderMap;
 use hyper::upgrade::Upgraded;
 use hyper_tungstenite::WebSocketStream;
 use rayon::prelude::*;
@@ -62,6 +63,7 @@ async fn endpoint(
     config_a: Arc<Mutex<Configuration>>,
     uri: &hyper::Uri,
     method: hyper::Method,
+    header: HeaderMap,
     body: hyper::Body,
 ) -> Result<Response<Body>, Infallible> {
     tracing::info!("{}", uri);
@@ -72,7 +74,7 @@ async fn endpoint(
 
     let Some(route) = route else {
          if config.build_mode == Some(BuildMode::Write) {
-             return builder::core::build_response(config_a, uri, method, body).await
+             return builder::core::build_response(config_a, uri, method, header, body).await
          } else {
              tracing::info!("Resource not found and build mode disabled");
              let response = Response::builder().status(404).body(Body::empty()).unwrap();
@@ -87,7 +89,7 @@ async fn endpoint(
         }
 
         if config.build_mode == Some(BuildMode::Write) {
-            return builder::core::build_response(config_a, uri, method, body).await;
+            return builder::core::build_response(config_a, uri, method, header, body).await;
         } else {
             tracing::error!("Will build new route for missing file");
             let response = Response::builder().status(404).body(Body::empty()).unwrap();
@@ -159,8 +161,9 @@ async fn check_ws(
             Ok(response)
         }
     } else {
+        let header = request.headers().to_owned();
         let body = request.into_body();
-        endpoint(config, &uri, method, body).await
+        endpoint(config, &uri, method, header, body).await
     }
 }
 

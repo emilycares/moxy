@@ -1,6 +1,6 @@
 use std::{collections::HashMap, convert::Infallible, sync::Arc};
 
-use hyper::{Body, Response};
+use hyper::{Body, Response, HeaderMap};
 use tokio::sync::Mutex;
 
 use crate::configuration::{BuildMode, Configuration, Metadata, RouteMethod};
@@ -27,6 +27,7 @@ pub async fn build_response(
     config_a: Arc<Mutex<Configuration>>,
     uri: &hyper::Uri,
     method: hyper::Method,
+    header: HeaderMap,
     body: hyper::Body,
 ) -> Result<Response<Body>, Infallible> {
     let config_b = config_a.clone();
@@ -45,7 +46,7 @@ pub async fn build_response(
         RouteMethod::from(method),
         request::util::get_url(uri, remote),
         reqwest::Body::from(body),
-        HashMap::new(),
+        header
     )
     .await;
 
@@ -92,9 +93,7 @@ pub fn get_response(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use hyper::Body;
+    use hyper::{Body, HeaderMap};
 
     use crate::{builder::request, configuration::RouteMethod};
 
@@ -104,7 +103,7 @@ mod tests {
             RouteMethod::GET,
             "http://example.com".to_string(),
             Body::empty(),
-            HashMap::new(),
+            HeaderMap::new()
         )
         .await
         .unwrap();
