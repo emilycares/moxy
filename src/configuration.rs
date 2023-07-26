@@ -1,6 +1,6 @@
 //! This contains the configuration datastructures and the logic how to read and write it.
 
-use hyper::{Method, Uri};
+use hyper::Method;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::{
@@ -363,31 +363,30 @@ pub async fn get_configuration() -> Configuration {
 /// ```
 pub fn get_route<'a>(
     routes: &'a [Route],
-    uri: &'a Uri,
+    uri: &'a str,
     method: &RouteMethod,
 ) -> (Option<&'a Route>, Option<&'a str>) {
     for i in routes.iter() {
         if i.method.eq(method) {
             let index = &i.path.find("$$$");
-            let path = &uri.path();
 
             if let Some(index) = index {
                 let match_before = &i.path[0..*index];
 
-                if path.starts_with(match_before) {
+                if uri.starts_with(match_before) {
                     if index + 3 != i.path.len() {
                         let match_end = &i.path[index + 3..i.path.len()];
 
-                        if path.ends_with(match_end) {
+                        if uri.ends_with(match_end) {
                             let sd = match_end.len();
-                            return (Some(i), Some(&path[i.path.len() - 3 - sd..path.len() - sd]));
+                            return (Some(i), Some(&uri[i.path.len() - 3 - sd..uri.len() - sd]));
                         }
                     } else {
-                        return (Some(i), Some(&path[i.path.len() - 3..path.len()]));
+                        return (Some(i), Some(&uri[i.path.len() - 3..uri.len()]));
                     }
                 }
             }
-            if path.ends_with(&i.path) {
+            if uri.ends_with(&i.path) {
                 return (Some(i), None);
             }
         }
@@ -427,8 +426,6 @@ pub async fn save_configuration(configuration: Configuration) -> Result<(), std:
 
 #[cfg(test)]
 mod tests {
-    use hyper::Uri;
-
     use crate::configuration::{get_route, Route, RouteMethod, WsMessageTime};
 
     use super::Configuration;
@@ -442,8 +439,8 @@ mod tests {
             resource: Some("db/api/test.json".to_string()),
             messages: vec![],
         }];
-        let url = &"http://localhost:8080/api/test".parse::<Uri>().unwrap();
-        let (result, parameter) = get_route(&routes, &url, &RouteMethod::GET);
+        let url = "http://localhost:8080/api/test";
+        let (result, parameter) = get_route(&routes, url, &RouteMethod::GET);
 
         assert_eq!(result.unwrap().resource, routes[0].resource);
         assert_eq!(parameter, None);
@@ -546,48 +543,30 @@ mod tests {
         ];
 
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/1/abc.json"
-                    .parse::<Uri>()
-                    .unwrap(),
-                &RouteMethod::GET
-            )
-            .0
-            .unwrap()
-            .resource
-            .as_ref()
-            .unwrap(),
+            get_route(&routes, "/api/test/1/abc.json", &RouteMethod::GET)
+                .0
+                .unwrap()
+                .resource
+                .as_ref()
+                .unwrap(),
             "db/api/1/$$$.json"
         );
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/2/abc.json"
-                    .parse::<Uri>()
-                    .unwrap(),
-                &RouteMethod::GET
-            )
-            .0
-            .unwrap()
-            .resource
-            .as_ref()
-            .unwrap(),
+            get_route(&routes, "/api/test/2/abc.json", &RouteMethod::GET)
+                .0
+                .unwrap()
+                .resource
+                .as_ref()
+                .unwrap(),
             "db/api/2/$$$.json"
         );
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/3/abc.json"
-                    .parse::<Uri>()
-                    .unwrap(),
-                &RouteMethod::GET
-            )
-            .0
-            .unwrap()
-            .resource
-            .as_ref()
-            .unwrap(),
+            get_route(&routes, "/api/test/3/abc.json", &RouteMethod::GET)
+                .0
+                .unwrap()
+                .resource
+                .as_ref()
+                .unwrap(),
             "db/api/3/$$$.json"
         );
     }
@@ -612,33 +591,21 @@ mod tests {
         ];
 
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/abc.txt"
-                    .parse::<Uri>()
-                    .unwrap(),
-                &RouteMethod::GET
-            )
-            .0
-            .unwrap()
-            .resource
-            .as_ref()
-            .unwrap(),
+            get_route(&routes, "/api/test/abc.txt", &RouteMethod::GET)
+                .0
+                .unwrap()
+                .resource
+                .as_ref()
+                .unwrap(),
             "db/api/$$$.txt"
         );
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/abc.json"
-                    .parse::<Uri>()
-                    .unwrap(),
-                &RouteMethod::GET
-            )
-            .0
-            .unwrap()
-            .resource
-            .as_ref()
-            .unwrap(),
+            get_route(&routes, "/api/test/abc.json", &RouteMethod::GET)
+                .0
+                .unwrap()
+                .resource
+                .as_ref()
+                .unwrap(),
             "db/api/$$$.json"
         );
     }
@@ -654,13 +621,9 @@ mod tests {
         }];
 
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/abc".parse::<Uri>().unwrap(),
-                &RouteMethod::GET
-            )
-            .1
-            .unwrap(),
+            get_route(&routes, "/api/test/abc", &RouteMethod::GET)
+                .1
+                .unwrap(),
             "abc"
         );
     }
@@ -676,15 +639,9 @@ mod tests {
         }];
 
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/abc.txt"
-                    .parse::<Uri>()
-                    .unwrap(),
-                &RouteMethod::GET
-            )
-            .1
-            .unwrap(),
+            get_route(&routes, "/api/test/abc.txt", &RouteMethod::GET)
+                .1
+                .unwrap(),
             "abc"
         );
     }
@@ -723,7 +680,7 @@ mod tests {
             messages: vec![],
         }];
 
-        let uri = Uri::from_static("/a/test");
+        let uri = "/a/test";
 
         let result = get_route(&routes, &uri, &RouteMethod::GET);
 

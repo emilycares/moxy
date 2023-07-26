@@ -10,7 +10,7 @@ pub async fn fetch_http(
     method: RouteMethod,
     url: impl reqwest::IntoUrl,
     body: impl Into<reqwest::Body>,
-    header: HeaderMap
+    header: HeaderMap,
 ) -> Option<ResourceData> {
     let response = get_request(method.clone(), url, body, header).send().await;
 

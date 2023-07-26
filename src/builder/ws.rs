@@ -9,7 +9,7 @@ use futures_util::{
     stream::{FuturesUnordered, SplitSink, SplitStream},
     SinkExt, StreamExt,
 };
-use hyper::{upgrade::Upgraded, Request, http::HeaderName};
+use hyper::{http::HeaderName, upgrade::Upgraded, Request};
 use hyper_tungstenite::{tungstenite::Message, WebSocketStream};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{
@@ -65,16 +65,16 @@ impl WsClientMessage {
 
 /// generate route for a websocket
 pub async fn build_ws(
-    uri: &hyper::Uri,
+    uri: &str,
     metadata: Option<Metadata>,
     remote: impl Into<String> + std::marker::Send + 'static,
     websocket: hyper_tungstenite::HyperWebsocket,
 ) -> Result<Route, u8> {
-    let path = uri.path().to_string();
+    let path = uri;
     let mut route = Route {
         method: RouteMethod::WS,
         metadata: metadata.clone(),
-        path: path.clone(),
+        path: path.to_string(),
         resource: None,
         messages: vec![],
     };
@@ -248,7 +248,10 @@ pub fn get_ws_url(url: &str) -> String {
 }
 
 fn get_tls_connector() -> Option<tokio_tungstenite::Connector> {
-    let Ok(connector) = native_tls::TlsConnector::builder().danger_accept_invalid_certs(true).build() else {
+    let Ok(connector) = native_tls::TlsConnector::builder()
+        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_hostnames(true)
+        .build() else {
         tracing::error!("Unable to create tls connector");
         return None;
     };

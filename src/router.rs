@@ -1,8 +1,8 @@
 //! Returns a respomse to a given request.
 use futures_util::StreamExt;
 use futures_util::{sink::SinkExt, stream::FuturesUnordered};
-use hyper::HeaderMap;
 use hyper::upgrade::Upgraded;
+use hyper::HeaderMap;
 use hyper_tungstenite::WebSocketStream;
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -61,7 +61,7 @@ pub async fn start() {
 /// Call data_loader or builder depending on if the route exists or not.
 async fn endpoint(
     config_a: Arc<Mutex<Configuration>>,
-    uri: &hyper::Uri,
+    uri: &str,
     method: hyper::Method,
     header: HeaderMap,
     body: hyper::Body,
@@ -130,7 +130,7 @@ async fn check_ws(
     request: Request<Body>,
     config: Arc<Mutex<Configuration>>,
 ) -> Result<Response<Body>, Infallible> {
-    let uri = request.uri().clone();
+    let uri = request.uri().path_and_query().unwrap().to_string();
     let method = request.method().clone();
     if hyper_tungstenite::is_upgrade_request(&request) {
         if let Ok((response, websocket)) = hyper_tungstenite::upgrade(request, None) {
@@ -169,7 +169,7 @@ async fn check_ws(
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 async fn endpoint_ws(
-    uri: &hyper::Uri,
+    uri: &str,
     metadata: Option<Metadata>,
     websocket: HyperWebsocket,
     config_a: Arc<Mutex<Configuration>>,

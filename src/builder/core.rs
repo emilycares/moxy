@@ -1,6 +1,6 @@
 use std::{collections::HashMap, convert::Infallible, sync::Arc};
 
-use hyper::{Body, Response, HeaderMap};
+use hyper::{Body, HeaderMap, Response};
 use tokio::sync::Mutex;
 
 use crate::configuration::{BuildMode, Configuration, Metadata, RouteMethod};
@@ -25,7 +25,7 @@ pub struct ResourceData {
 /// same URL again.
 pub async fn build_response(
     config_a: Arc<Mutex<Configuration>>,
-    uri: &hyper::Uri,
+    uri: &str,
     method: hyper::Method,
     header: HeaderMap,
     body: hyper::Body,
@@ -46,7 +46,7 @@ pub async fn build_response(
         RouteMethod::from(method),
         request::util::get_url(uri, remote),
         reqwest::Body::from(body),
-        header
+        header,
     )
     .await;
 
@@ -61,7 +61,7 @@ pub async fn build_response(
     if response.code != 404 && build_mode == &BuildMode::Write {
         storage::save(
             &response.method,
-            uri.path(),
+            uri,
             Some(Metadata {
                 code: response.code,
                 header: response.headers.clone(),
@@ -103,7 +103,7 @@ mod tests {
             RouteMethod::GET,
             "http://example.com".to_string(),
             Body::empty(),
-            HeaderMap::new()
+            HeaderMap::new(),
         )
         .await
         .unwrap();
