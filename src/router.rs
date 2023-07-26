@@ -102,7 +102,7 @@ async fn endpoint(
 
     for (key, value) in metadata.header.into_iter() {
         if let Some(key) = key {
-            resp_build =  resp_build.header(key, value);
+            resp_build = resp_build.header(key, value);
         }
     }
 
@@ -111,10 +111,7 @@ async fn endpoint(
     Ok(response)
 }
 
-fn get_content_type_with_fallback(
-    headers: HeaderMap,
-    resource: Option<String>,
-) -> String {
+fn get_content_type_with_fallback(headers: HeaderMap, resource: Option<String>) -> String {
     return headers
         .get("content-type")
         .map(|v| v.to_str().unwrap_or_default())
@@ -132,17 +129,17 @@ async fn check_ws(
 ) -> Result<Response<Body>, Infallible> {
     let uri = request.uri().path_and_query().unwrap().to_string();
     let method = request.method().clone();
+    let headers = request.headers().clone();
     if hyper_tungstenite::is_upgrade_request(&request) {
         if let Ok((response, websocket)) = hyper_tungstenite::upgrade(request, None) {
             let restponse_status = response.status().as_u16().clone();
-            let response_headers = response.headers().clone();
             // Spawn a task to handle the websocket connection.
             tokio::spawn(async move {
                 if let Err(e) = endpoint_ws(
                     &uri,
                     Some(Metadata {
                         code: restponse_status,
-                        header: response_headers,
+                        header: headers,
                     }),
                     websocket,
                     config,
