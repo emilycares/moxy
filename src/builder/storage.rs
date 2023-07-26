@@ -216,14 +216,25 @@ async fn save_file(location: &str, body: Vec<u8>, folder: &str) -> Result<(), st
     Ok(())
 }
 
+const FALLBACK_CHAR: &str = "_";
+
 /// Will generate a file location based on a uri.
 pub fn get_save_path(uri: &str, content_type: Option<String>) -> String {
+    let uri = uri
+        .replace('*', FALLBACK_CHAR)
+        .replace('?', FALLBACK_CHAR)
+        .replace('"', FALLBACK_CHAR)
+        .replace('<', FALLBACK_CHAR)
+        .replace('>', FALLBACK_CHAR)
+        .replace(':', FALLBACK_CHAR)
+        .replace('|', FALLBACK_CHAR);
+
     let file_suffix = if uri.ends_with(".txt") || uri.ends_with(".json") {
         Some(String::new())
     } else {
         get_extension(content_type)
     };
-    let mut path = "./db".to_owned() + uri;
+    let mut path = "./db".to_owned() + &uri.to_string();
 
     if path.ends_with('/') {
         path += "index";
