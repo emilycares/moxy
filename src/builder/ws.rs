@@ -148,7 +148,7 @@ pub async fn build_ws(
         tracing::trace!("Save messages");
         let start = Instant::now();
         let remote_messages2 = remote_messages2.clone();
-        while let Ok(message) = rx_r2.recv().await {
+        while let Ok(message) = rx_r2.blocking_recv() {
             let offset = start.elapsed().as_secs();
             let mut messages = remote_messages2.lock().await;
             messages.push(WsClientMessage::from(message.clone(), offset));
@@ -185,7 +185,7 @@ pub async fn send_ws_remote(
     mut write: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
     mut rx: tokio::sync::mpsc::Receiver<Message>,
 ) {
-    while let Some(message) = rx.recv().await {
+    while let Some(message) = rx.blocking_recv() {
         match write.send(message).await {
             Ok(_data) => tracing::trace!("[WS] sent message to server"),
             Err(_) => tracing::trace!("[WS] Unable to send data to server"),
@@ -199,11 +199,19 @@ pub async fn read_ws_remote(
     mut read: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     tx: tokio::sync::broadcast::Sender<Message>,
 ) {
-    while let Some(Ok(message)) = read.next().await {
-        if tx.send(message).is_ok() {
-            tracing::trace!("Sent message to remote");
-        } else {
-            tracing::error!("Unable to send message to remote");
+    loop {
+        match read.next().await {
+            Some(Ok(message)) => {
+                if let Ok(_) = tx.send(message) {
+                    tracing::trace!("Sent message to remote");
+                } else {
+                    tracing::error!("Unable to send message to remote");
+                }
+            }
+            Some(Err(err)) => {
+                tracing::error!("Got eror while reading websocket: {err:?}");
+            }
+            None => (),
         }
     }
 }
@@ -213,11 +221,19 @@ pub async fn read_ws_client(
     mut read: SplitStream<WebSocketStream<Upgraded>>,
     tx: tokio::sync::mpsc::Sender<Message>,
 ) {
-    while let Some(Ok(message)) = read.next().await {
-        if let Ok(_) = tx.send(message).await {
-            tracing::trace!("got user input");
-        } else {
-            tracing::error!("Unable to process user input");
+    loop {
+        match read.next().await {
+            Some(Ok(message)) => {
+                if let Ok(_) = tx.send(message).await {
+                    tracing::trace!("got user input");
+                } else {
+                    tracing::error!("Unable to process user input");
+                }
+            }
+            Some(Err(err)) => {
+                tracing::error!("Got eror while reading websocket: {err:?}");
+            }
+            None => (),
         }
     }
 }
@@ -227,7 +243,7 @@ pub async fn send_ws_client(
     mut write: SplitSink<WebSocketStream<Upgraded>, Message>,
     mut rx: tokio::sync::broadcast::Receiver<Message>,
 ) {
-    while let Ok(message) = rx.recv().await {
+    while let Ok(message) = rx.try_recv() {
         if let Ok(_data) = write.send(message).await {
             tracing::trace!("[WS] sent message to client");
         } else {
