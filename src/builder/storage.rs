@@ -24,8 +24,9 @@ pub async fn save(
         .unwrap_or_default()
         .header
         .get("content-type")
-        .cloned();
-    let path = get_save_path(uri, content_type);
+        .cloned()
+        .map(|v| v.to_str().unwrap_or_default().to_string());
+    let path = get_save_path(uri, content_type.as_deref());
     let mut config = config.lock().await;
     if config.get_route(&path, method).is_none() {
         let route = Route {
@@ -219,7 +220,7 @@ async fn save_file(location: &str, body: Vec<u8>, folder: &str) -> Result<(), st
 const FALLBACK_CHAR: &str = "_";
 
 /// Will generate a file location based on a uri.
-pub fn get_save_path(uri: &str, content_type: Option<String>) -> String {
+pub fn get_save_path(uri: &str, content_type: Option<&str>) -> String {
     let uri = uri
         .replace('*', FALLBACK_CHAR)
         .replace('?', FALLBACK_CHAR)
@@ -253,7 +254,7 @@ pub fn get_save_path(uri: &str, content_type: Option<String>) -> String {
 }
 
 /// convert content_type to filetype
-fn get_extension(content_type: Option<String>) -> Option<String> {
+fn get_extension(content_type: Option<&str>) -> Option<String> {
     if let Some(content_type) = content_type {
         let content_type = if content_type.contains(';') {
             if let Some(content_type) = content_type.split(';').next() {

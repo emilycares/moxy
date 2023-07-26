@@ -3,8 +3,6 @@ use reqwest::Error;
 
 use crate::{builder::core::ResourceData, configuration::RouteMethod};
 
-use super::util::header_map_to_hash_map;
-
 /// Load data from external http source
 pub async fn fetch_http(
     method: RouteMethod,
@@ -17,7 +15,7 @@ pub async fn fetch_http(
     if let Ok(response) = response {
         return Some(ResourceData {
             method,
-            headers: header_map_to_hash_map(response.headers()),
+            headers: response.headers().clone(),
             code: response.status().as_u16(),
             payload: get_payload(response.bytes().await),
         });

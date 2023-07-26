@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::Infallible, sync::Arc};
+use std::{convert::Infallible, sync::Arc};
 
 use hyper::{Body, HeaderMap, Response};
 use tokio::sync::Mutex;
@@ -13,7 +13,7 @@ pub struct ResourceData {
     /// HTTP method
     pub method: RouteMethod,
     /// HTTP heades
-    pub headers: HashMap<String, String>,
+    pub headers: HeaderMap,
     /// HTTP status code
     pub code: u16,
     /// HTTP body
@@ -78,14 +78,16 @@ pub async fn build_response(
 
 /// Returns a respinse with headers and a code
 pub fn get_response(
-    headers: HashMap<String, String>,
+    headers: HeaderMap,
     code: u16,
     body: Body,
 ) -> Result<Response<Body>, Infallible> {
     let mut response = Response::builder().status(code);
 
     for (key, value) in headers.into_iter() {
-        response = response.header(key, value);
+        if let Some(key) = key {
+            response = response.header(key, value);
+        }
     }
 
     Ok(response.body(body).unwrap())

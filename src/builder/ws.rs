@@ -21,7 +21,7 @@ use crate::{
     configuration::{Metadata, Route, RouteMethod},
 };
 
-use super::{request::util::hash_map_to_header_map, storage};
+use super::storage;
 
 /// A Message that is sent or received on a websocket
 #[derive(Debug, Clone)]
@@ -265,7 +265,7 @@ fn get_request(url: String, metadata: Option<Metadata>) -> Request<()> {
 
     if let Some(metadata) = metadata {
         if let Some(request_header) = request.headers_mut() {
-            for (key, value) in hash_map_to_header_map(metadata.header) {
+            for (key, value) in metadata.header {
                 if let Some(key) = key {
                     request_header.insert::<HeaderName>(key.into(), value);
                 }

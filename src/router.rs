@@ -5,7 +5,6 @@ use hyper::upgrade::Upgraded;
 use hyper::HeaderMap;
 use hyper_tungstenite::WebSocketStream;
 use rayon::prelude::*;
-use std::collections::HashMap;
 use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 
 use hyper::{
@@ -15,7 +14,6 @@ use hyper::{
 use hyper_tungstenite::{tungstenite::Message, HyperWebsocket};
 use tokio::sync::Mutex;
 
-use crate::builder::request::util::{hash_map_to_mut_header_map, header_map_to_hash_map};
 use crate::configuration::Metadata;
 use crate::{
     builder::{self, storage},
@@ -102,10 +100,11 @@ async fn endpoint(
         get_content_type_with_fallback(metadata.header.clone(), route.resource.clone()),
     );
 
-    let mut headers = resp_build
-        .headers_mut()
-        .expect("This has just been created");
-    hash_map_to_mut_header_map(metadata.header, &mut headers);
+    for (key, value) in metadata.header.into_iter() {
+        if let Some(key) = key {
+            resp_build =  resp_build.header(key, value);
+        }
+    }
 
     let response = resp_build.body(Body::from(data)).unwrap();
 
@@ -113,11 +112,12 @@ async fn endpoint(
 }
 
 fn get_content_type_with_fallback(
-    headers: HashMap<String, String>,
+    headers: HeaderMap,
     resource: Option<String>,
 ) -> String {
     return headers
         .get("content-type")
+        .map(|v| v.to_str().unwrap_or_default())
         .map(|c| c.to_owned())
         .unwrap_or_else(|| {
             tracing::info!("Guessing content-type based on the file resource. Becaue it was not specified in the headers");
@@ -135,7 +135,7 @@ async fn check_ws(
     if hyper_tungstenite::is_upgrade_request(&request) {
         if let Ok((response, websocket)) = hyper_tungstenite::upgrade(request, None) {
             let restponse_status = response.status().as_u16().clone();
-            let response_headers = header_map_to_hash_map(response.headers()).clone();
+            let response_headers = response.headers().clone();
             // Spawn a task to handle the websocket connection.
             tokio::spawn(async move {
                 if let Err(e) = endpoint_ws(

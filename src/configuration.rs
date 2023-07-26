@@ -1,10 +1,10 @@
 //! This contains the configuration datastructures and the logic how to read and write it.
 
-use hyper::Method;
+use hyper::{Method, HeaderMap};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::{
-    collections::HashMap, convert::TryInto, fmt::Display, io::ErrorKind, str::FromStr,
+    convert::TryInto, fmt::Display, io::ErrorKind, str::FromStr,
     time::Duration,
 };
 use tokio::{
@@ -38,14 +38,15 @@ pub struct Metadata {
     /// HTTP status code
     pub code: u16,
     /// HTTP headers
-    pub header: HashMap<String, String>,
+    #[serde(with = "http_serde::header_map")]
+    pub header: HeaderMap,
 }
 
 impl Default for Metadata {
     fn default() -> Self {
         Self {
             code: 200,
-            header: HashMap::new(),
+            header: HeaderMap::new()
         }
     }
 }
