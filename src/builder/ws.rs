@@ -249,14 +249,20 @@ pub async fn send_ws_client(
     mut write: SplitSink<WebSocketStream<Upgraded>, Message>,
     mut rx: tokio::sync::broadcast::Receiver<Message>,
 ) {
-    while let Ok(message) = rx.try_recv() {
-        if let Ok(_data) = write.send(message).await {
-            tracing::trace!("[WS] sent message to client");
-        } else {
-            tracing::trace!("[WS] Unable to send data to client");
+    loop {
+        match rx.recv().await {
+            Ok(message) => {
+                if let Ok(_data) = write.send(message).await {
+                    tracing::trace!("[WS] sent message to client");
+                } else {
+                    tracing::trace!("[WS] Unable to send data to client");
+                }
+            }
+            Err(err) => {
+                tracing::error!("Got error while messaging to websocket: {err}");
+            },
         }
     }
-    tracing::trace!("Sent all messages");
 }
 
 /// Change protocol to ws
