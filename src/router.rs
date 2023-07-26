@@ -254,10 +254,13 @@ async fn send_ws_messages(
     mut rx: tokio::sync::mpsc::Receiver<Message>,
     mut websocket: WebSocketStream<Upgraded>,
 ) {
-    while let Some(message) = rx.blocking_recv() {
-        match websocket.send(message).await {
-            Ok(_) => tracing::trace!("Sent message"),
-            Err(_) => tracing::error!("Failed to send message"),
+    loop {
+        match rx.try_recv() {
+            Ok(message) => match websocket.send(message).await {
+                Ok(_) => tracing::trace!("Sent message"),
+                Err(_) => tracing::error!("Failed to send message"),
+            },
+            Err(_) => ()
         }
     }
 }

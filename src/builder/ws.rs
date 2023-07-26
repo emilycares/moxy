@@ -148,11 +148,15 @@ pub async fn build_ws(
         tracing::trace!("Save messages");
         let start = Instant::now();
         let remote_messages2 = remote_messages2.clone();
-        while let Ok(message) = rx_r2.blocking_recv() {
-            let offset = start.elapsed().as_secs();
-            let mut messages = remote_messages2.lock().await;
-            messages.push(WsClientMessage::from(message.clone(), offset));
-            //tx_u.send(message);
+        loop {
+            match rx_r2.recv().await {
+                Ok(message) => {
+                    let offset = start.elapsed().as_secs();
+                    let mut messages = remote_messages2.lock().await;
+                    messages.push(WsClientMessage::from(message.clone(), offset));
+                }
+                Err(_) => (),
+            }
         }
     }));
 
@@ -185,13 +189,15 @@ pub async fn send_ws_remote(
     mut write: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
     mut rx: tokio::sync::mpsc::Receiver<Message>,
 ) {
-    while let Some(message) = rx.blocking_recv() {
-        match write.send(message).await {
-            Ok(_data) => tracing::trace!("[WS] sent message to server"),
-            Err(_) => tracing::trace!("[WS] Unable to send data to server"),
+    loop {
+        match rx.recv().await {
+            Some(message) => match write.send(message).await {
+                Ok(_data) => tracing::trace!("[WS] sent message to server"),
+                Err(_) => tracing::trace!("[WS] Unable to send data to server"),
+            },
+            None => (),
         }
     }
-    tracing::trace!("Sent all messages");
 }
 
 /// Read from remote
