@@ -215,7 +215,7 @@ pub async fn read_ws_remote(
                 }
             }
             Some(Err(err)) => {
-                tracing::error!("Got eror while reading websocket: {err:?}");
+                tracing::error!("Got error while reading remote websocket: {err:?}");
             }
             None => (),
         }
@@ -237,7 +237,7 @@ pub async fn read_ws_client(
                 }
             }
             Some(Err(err)) => {
-                tracing::error!("Got eror while reading websocket: {err:?}");
+                tracing::error!("Got error while reading client websocket: {err:?}");
             }
             None => (),
         }
