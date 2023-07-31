@@ -142,6 +142,7 @@ pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) 
         .enumerate()
         .map(|(i, message)| {
             let mut path = path.to_owned() + "_ws/" + &i.to_string();
+            let message_type = message.message_type.clone();
 
             if is_json(&message.content) {
                 path += ".json";
@@ -155,6 +156,7 @@ pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) 
                         kind: WsMessageType::Startup,
                         time: None,
                         location: path,
+                        message_type
                     },
                     message.content.clone(),
                 )
@@ -165,6 +167,7 @@ pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) 
                         kind: WsMessageType::After,
                         time: Some(time),
                         location: path,
+                        message_type
                     },
                     message.content.clone(),
                 )

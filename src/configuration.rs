@@ -60,6 +60,8 @@ pub struct WsMessage {
     /// This will be contveted to WsMessageTime
     #[serde(default)]
     pub time: Option<String>,
+    /// The message type that has to be sent
+    pub message_type: WsMessagType,
     /// File storage location
     pub location: String,
 }
@@ -75,6 +77,27 @@ impl WsMessage {
 
         None
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+/// The type of the websocket message.
+pub enum WsMessagType {
+    /// A text WebSocket message
+    Text,
+    /// A binary WebSocket message
+    Binary,
+    /// A ping message with the specified payload
+    ///
+    /// The payload here must have a length less than 125 bytes
+    Ping,
+    /// A pong message with the specified payload
+    ///
+    /// The payload here must have a length less than 125 bytes
+    Pong,
+    /// A close message with the optional close frame.
+    Close,
+    /// Raw frame. Note, that you're not going to get this value while reading the message.
+    Frame,
 }
 
 /// Time units

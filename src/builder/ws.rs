@@ -18,7 +18,7 @@ use tokio_tungstenite::{
 
 use crate::{
     builder::request,
-    configuration::{Metadata, Route, RouteMethod},
+    configuration::{Metadata, Route, RouteMethod, WsMessagType},
 };
 
 use super::storage;
@@ -30,8 +30,8 @@ pub struct WsClientMessage {
     pub offset: u64,
     /// Message content
     pub content: Vec<u8>,
-    /// If data is not a string
-    pub binary: bool,
+    /// Message type
+    pub message_type: WsMessagType,
 }
 
 impl WsClientMessage {
@@ -41,27 +41,37 @@ impl WsClientMessage {
             Message::Text(m) => Self {
                 offset,
                 content: m.as_str().as_bytes().to_vec(),
-                binary: false,
+                message_type: WsMessagType::Text,
             },
             Message::Binary(m) => Self {
                 offset,
                 content: m,
-                binary: true,
+                message_type: WsMessagType::Binary,
             },
-            _ => Self {
+            Message::Ping(m) => Self {
+                offset,
+                content: m,
+                message_type: WsMessagType::Ping,
+            },
+            Message::Pong(m) => Self {
+                offset,
+                content: m,
+                message_type: WsMessagType::Pong,
+            },
+            Message::Close(_) => Self {
                 offset,
                 content: vec![],
-                binary: true,
+                message_type: WsMessagType::Close,
+            },
+            Message::Frame(_) => Self {
+                offset,
+                content: vec![],
+                message_type: WsMessagType::Frame,
             },
         }
     }
 }
 
-//impl From<Message> for WsClientMessage {
-//fn from(_: Message) -> Self {
-//todo!()
-//}
-//}
 
 /// generate route for a websocket
 pub async fn build_ws(
@@ -260,7 +270,7 @@ pub async fn send_ws_client(
             }
             Err(err) => {
                 tracing::error!("Got error while messaging to websocket: {err}");
-            },
+            }
         }
     }
 }

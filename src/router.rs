@@ -5,7 +5,7 @@ use hyper::upgrade::Upgraded;
 use hyper::HeaderMap;
 use hyper_tungstenite::WebSocketStream;
 use rayon::prelude::*;
-use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
+use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 
 use hyper::{
     service::{make_service_fn, service_fn},
@@ -14,7 +14,7 @@ use hyper::{
 use hyper_tungstenite::{tungstenite::Message, HyperWebsocket};
 use tokio::sync::Mutex;
 
-use crate::configuration::Metadata;
+use crate::configuration::{Metadata, WsMessage};
 use crate::{
     builder::{self, storage},
     configuration::{self, BuildMode, Configuration, RouteMethod, WsMessageType},
@@ -200,44 +200,38 @@ async fn endpoint_ws(
 
     let (tx, rx) = tokio::sync::mpsc::channel(32);
 
-    let startup_messages: Vec<Vec<u8>> = route
+    let startup_messages: Vec<(WsMessage, Vec<u8>)> = route
         .messages
         .par_iter()
-        .filter(|c| c.kind == WsMessageType::Startup)
-        .map(|c| data_loader::file_sync(c.location.as_str()))
-        .filter(|c| c.is_ok())
-        .map(|c| c.unwrap())
+        .filter(|message| message.kind == WsMessageType::Startup)
+        .map(|message| (message, data_loader::file_sync(message.location.as_str())))
+        .filter(|(_, content)| content.is_ok())
+        .map(|(message, content)| (message.clone(), content.unwrap()))
         .collect();
 
-    for c in startup_messages {
-        match std::str::from_utf8(&c) {
-            Ok(m) => tx.send(Message::text(m)).await?,
-            Err(_) => tx.send(Message::binary(c)).await?,
-        };
+    for (message, content) in startup_messages {
+        send_handle_type(message, content, &tx).await;
     }
-    let after_messages: Vec<(Duration, Vec<u8>)> = route
+    let after_messages: Vec<(WsMessage, Vec<u8>)> = route
         .messages
         .par_iter()
-        .filter(|c| c.kind == WsMessageType::After)
-        .map(|c| (c.get_time(), data_loader::file_sync(c.location.as_str())))
-        .filter(|c| c.0.is_some() && c.1.is_ok())
-        .map(|c| (c.0.unwrap(), c.1.unwrap()))
+        .filter(|message| message.kind == WsMessageType::After)
+        .map(|message| (message, data_loader::file_sync(message.location.as_str())))
+        .filter(|(_, content)| content.is_ok())
+        .map(|(message, content)| (message.clone(), content.unwrap()))
         .collect();
 
     let mut tasks = FuturesUnordered::new();
 
-    for m in after_messages {
+    for (message, content) in after_messages {
         let tx = tx.clone();
-        tasks.push(tokio::task::spawn(async move {
-            tokio::time::sleep(m.0).await;
+        if let Some(time) = message.get_time() {
+            tasks.push(tokio::task::spawn(async move {
+                tokio::time::sleep(time).await;
 
-            let msg = m.1;
-
-            match std::str::from_utf8(&msg) {
-                Ok(m) => tx.send(Message::text(m)).await.unwrap(),
-                Err(_) => tx.send(Message::binary(msg.clone())).await.unwrap(),
-            }
-        }));
+                send_handle_type(message, content, &tx).await;
+            }));
+        }
     }
 
     tasks.push(tokio::task::spawn(async move {
@@ -250,6 +244,40 @@ async fn endpoint_ws(
     Ok(())
 }
 
+async fn send_handle_type(
+    message: WsMessage,
+    content: Vec<u8>,
+    tx: &tokio::sync::mpsc::Sender<Message>,
+) {
+    match message.message_type {
+        configuration::WsMessagType::Text => {
+            match std::str::from_utf8(&content) {
+                Ok(m) => match tx.send(Message::text(m)).await {
+                    Ok(_) => (),
+                    Err(_) => tracing::error!("Unable to send Text message"),
+                },
+                Err(_) => {
+                    tracing::error!("Unable to send non utf-8 text message: {:?}", content);
+                }
+            };
+        }
+        configuration::WsMessagType::Binary => match tx.send(Message::Binary(content)).await {
+            Ok(_) => (),
+            Err(_) => tracing::error!("Unable to send Binary message"),
+        },
+        configuration::WsMessagType::Ping => match tx.send(Message::Ping(content)).await {
+            Ok(_) => (),
+            Err(_) => tracing::error!("Unable to send Ping message"),
+        },
+        configuration::WsMessagType::Pong => match tx.send(Message::Pong(content)).await {
+            Ok(_) => (),
+            Err(_) => tracing::error!("Unable to send Pong message"),
+        },
+        configuration::WsMessagType::Close => unimplemented!(),
+        configuration::WsMessagType::Frame => unimplemented!(),
+    };
+}
+
 async fn send_ws_messages(
     mut rx: tokio::sync::mpsc::Receiver<Message>,
     mut websocket: WebSocketStream<Upgraded>,
@@ -260,7 +288,7 @@ async fn send_ws_messages(
                 Ok(_) => tracing::trace!("Sent message"),
                 Err(_) => tracing::error!("Failed to send message"),
             },
-            Err(_) => ()
+            Err(_) => (),
         }
     }
 }
