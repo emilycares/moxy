@@ -252,7 +252,7 @@ async fn send_handle_type(
     match message.message_type {
         configuration::WsMessagType::Text => {
             match std::str::from_utf8(&content) {
-                Ok(m) => match tx.send(Message::text(m)).await {
+                Ok(m) => match tx.send(Message::text(m.replace("^@", "\u{0}"))).await {
                     Ok(_) => (),
                     Err(_) => tracing::error!("Unable to send Text message"),
                 },
