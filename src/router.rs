@@ -199,38 +199,47 @@ async fn endpoint_ws(
     let websocket = websocket.await?;
 
     let (tx, rx) = tokio::sync::mpsc::channel(32);
+    tracing::trace!("Start data loading");
 
-    let startup_messages: Vec<(WsMessage, Vec<u8>)> = route
+    let messages: Vec<(WsMessage, Vec<u8>)> = route
         .messages
         .par_iter()
-        .filter(|message| message.kind == WsMessageType::Startup)
         .map(|message| (message, data_loader::file_sync(message.location.as_str())))
         .filter(|(_, content)| content.is_ok())
         .map(|(message, content)| (message.clone(), content.unwrap()))
         .collect();
 
-    for (message, content) in startup_messages {
-        send_handle_type(message, content, &tx).await;
-    }
-    let after_messages: Vec<(WsMessage, Vec<u8>)> = route
-        .messages
-        .par_iter()
-        .filter(|message| message.kind == WsMessageType::After)
-        .map(|message| (message, data_loader::file_sync(message.location.as_str())))
-        .filter(|(_, content)| content.is_ok())
-        .map(|(message, content)| (message.clone(), content.unwrap()))
-        .collect();
+    tracing::trace!("Data loading done");
 
     let mut tasks = FuturesUnordered::new();
 
-    for (message, content) in after_messages {
-        let tx = tx.clone();
-        if let Some(time) = message.get_time() {
-            tasks.push(tokio::task::spawn(async move {
-                tokio::time::sleep(time).await;
+    for (message, content) in messages {
+        match message.kind {
+            WsMessageType::Startup => {
+                send_handle_type(&message, &content, &tx).await;
+            }
+            WsMessageType::After => {
+                let tx = tx.clone();
+                if let Some(time) = message.get_time() {
+                    tasks.push(tokio::task::spawn(async move {
+                        tokio::time::sleep(time).await;
 
-                send_handle_type(message, content, &tx).await;
-            }));
+                        send_handle_type(&message, &content, &tx).await;
+                    }));
+                }
+            }
+            WsMessageType::Every => {
+                let tx = tx.clone();
+                if let Some(ltime) = message.get_time() {
+                    tasks.push(tokio::task::spawn(async move {
+                        let mut interval = tokio::time::interval(ltime);
+                        loop {
+                            interval.tick().await;
+                            send_handle_type(&message, &content, &tx).await;
+                        }
+                    }));
+                }
+            }
         }
     }
 
@@ -245,8 +254,8 @@ async fn endpoint_ws(
 }
 
 async fn send_handle_type(
-    message: WsMessage,
-    content: Vec<u8>,
+    message: &WsMessage,
+    content: &Vec<u8>,
     tx: &tokio::sync::mpsc::Sender<Message>,
 ) {
     match message.message_type {
@@ -261,15 +270,15 @@ async fn send_handle_type(
                 }
             };
         }
-        configuration::WsMessagType::Binary => match tx.send(Message::Binary(content)).await {
+        configuration::WsMessagType::Binary => match tx.send(Message::Binary(content.to_owned())).await {
             Ok(_) => (),
             Err(_) => tracing::error!("Unable to send Binary message"),
         },
-        configuration::WsMessagType::Ping => match tx.send(Message::Ping(content)).await {
+        configuration::WsMessagType::Ping => match tx.send(Message::Ping(content.to_owned())).await {
             Ok(_) => (),
             Err(_) => tracing::error!("Unable to send Ping message"),
         },
-        configuration::WsMessagType::Pong => match tx.send(Message::Pong(content)).await {
+        configuration::WsMessagType::Pong => match tx.send(Message::Pong(content.to_owned())).await {
             Ok(_) => (),
             Err(_) => tracing::error!("Unable to send Pong message"),
         },
