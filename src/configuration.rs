@@ -103,6 +103,8 @@ pub enum WsMessagType {
 /// Time units
 #[derive(Debug, PartialEq, Eq)]
 pub enum WsMessageTime {
+    /// 5ms
+    Millisecond(usize),
     /// 5s
     Second(usize),
     /// 5m
@@ -119,7 +121,12 @@ impl FromStr for WsMessageTime {
     type Err = u8;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.ends_with('s') {
+        if s.ends_with("ms") {
+            let padding = 2;
+            if let Ok(number) = parse_time_number(s, padding) {
+                return Ok(Self::Millisecond(number));
+            }
+        } else if s.ends_with('s') {
             let padding = 1;
             if let Ok(number) = parse_time_number(s, padding) {
                 return Ok(Self::Second(number));
@@ -153,26 +160,28 @@ impl FromStr for WsMessageTime {
 impl Display for WsMessageTime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Second(t) => write!(f, "{t}s"),
-            Self::Minute(t) => write!(f, "{t}m"),
-            Self::Hour(t) => write!(f, "{t}h"),
-            Self::Sent(t) => write!(f, "{t}sent"),
-            Self::Received(t) => write!(f, "{t}received"),
+            WsMessageTime::Millisecond(t) => write!(f, "{t}ms"),
+            WsMessageTime::Second(t) => write!(f, "{t}s"),
+            WsMessageTime::Minute(t) => write!(f, "{t}m"),
+            WsMessageTime::Hour(t) => write!(f, "{t}h"),
+            WsMessageTime::Sent(t) => write!(f, "{t}sent"),
+            WsMessageTime::Received(t) => write!(f, "{t}received"),
         }
     }
 }
 
 impl From<WsMessageTime> for Duration {
     fn from(wt: WsMessageTime) -> Self {
-        let seconds = match wt {
-            WsMessageTime::Second(s) => s,
-            WsMessageTime::Minute(m) => 60 * m,
-            WsMessageTime::Hour(h) => 60 * 60 * h,
+        let millisecond = match wt {
+            WsMessageTime::Millisecond(m) => m,
+            WsMessageTime::Second(s) => 1000 * s,
+            WsMessageTime::Minute(m) => 1000 * 60 * m,
+            WsMessageTime::Hour(h) => 1000 * 60 * 60 * h,
             WsMessageTime::Sent(_) => 1,
             WsMessageTime::Received(_) => 1,
         };
 
-        Duration::from_secs(seconds.try_into().unwrap())
+        Duration::from_millis(millisecond.try_into().unwrap())
     }
 }
 
