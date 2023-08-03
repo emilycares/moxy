@@ -29,6 +29,7 @@ pub async fn build_response(
     method: hyper::Method,
     header: HeaderMap,
     body: hyper::Body,
+    no_ssl_check: bool,
 ) -> Result<Response<Body>, Infallible> {
     let config_b = config_a.clone();
     let config = config_b.lock().await.to_owned();
@@ -47,6 +48,7 @@ pub async fn build_response(
         request::util::get_url(uri, remote),
         reqwest::Body::from(body),
         header,
+        no_ssl_check
     )
     .await;
 
@@ -106,6 +108,7 @@ mod tests {
             "http://example.com".to_string(),
             Body::empty(),
             HeaderMap::new(),
+            false
         )
         .await
         .unwrap();

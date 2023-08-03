@@ -79,6 +79,7 @@ pub async fn build_ws(
     metadata: Option<Metadata>,
     remote: impl Into<String> + std::marker::Send + 'static,
     websocket: hyper_tungstenite::HyperWebsocket,
+    no_ssl_check: bool,
 ) -> Result<Route, u8> {
     let path = uri;
     let mut route = Route {
@@ -130,7 +131,7 @@ pub async fn build_ws(
             request,
             Some(WebSocketConfig::default()),
             true,
-            get_tls_connector(),
+            get_tls_connector(no_ssl_check),
         )
         .await
         {
@@ -285,10 +286,10 @@ pub fn get_ws_url(url: &str) -> String {
     url
 }
 
-fn get_tls_connector() -> Option<tokio_tungstenite::Connector> {
+fn get_tls_connector(no_ssl_check: bool) -> Option<tokio_tungstenite::Connector> {
     let Ok(connector) = native_tls::TlsConnector::builder()
-        .danger_accept_invalid_certs(true)
-        .danger_accept_invalid_hostnames(true)
+        .danger_accept_invalid_certs(no_ssl_check)
+        .danger_accept_invalid_hostnames(no_ssl_check)
         .build() else {
         tracing::error!("Unable to create tls connector");
         return None;

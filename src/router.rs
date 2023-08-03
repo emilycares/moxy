@@ -30,6 +30,8 @@ pub async fn start() {
     }
     let addr: Result<SocketAddr, _> = config.host.as_ref().unwrap().parse();
 
+    let no_ssl_check = config.no_ssl_check;
+
     let config = Arc::new(Mutex::new(config));
 
     if let Ok(addr) = addr {
@@ -39,7 +41,7 @@ pub async fn start() {
             async move {
                 Ok::<_, hyper::Error>(service_fn(move |req| {
                     let config = config.clone();
-                    async move { check_ws(req, config).await }
+                    async move { check_ws(req, config, no_ssl_check).await }
                 }))
             }
         });
@@ -63,6 +65,7 @@ async fn endpoint(
     method: hyper::Method,
     header: HeaderMap,
     body: hyper::Body,
+    no_ssl_check: bool,
 ) -> Result<Response<Body>, Infallible> {
     tracing::info!("{}", uri);
     let configc = config_a.clone();
@@ -72,7 +75,7 @@ async fn endpoint(
 
     let Some(route) = route else {
          if config.build_mode == Some(BuildMode::Write) {
-             return builder::core::build_response(config_a, uri, method, header, body).await
+             return builder::core::build_response(config_a, uri, method, header, body, no_ssl_check).await
          } else {
              tracing::info!("Resource not found and build mode disabled");
              let response = Response::builder().status(404).body(Body::empty()).unwrap();
@@ -87,7 +90,7 @@ async fn endpoint(
         }
 
         if config.build_mode == Some(BuildMode::Write) {
-            return builder::core::build_response(config_a, uri, method, header, body).await;
+            return builder::core::build_response(config_a, uri, method, header, body, no_ssl_check).await;
         } else {
             tracing::error!("Will build new route for missing file");
             let response = Response::builder().status(404).body(Body::empty()).unwrap();
@@ -126,6 +129,7 @@ fn get_content_type_with_fallback(headers: HeaderMap, resource: Option<String>) 
 async fn check_ws(
     request: Request<Body>,
     config: Arc<Mutex<Configuration>>,
+    no_ssl_check: bool,
 ) -> Result<Response<Body>, Infallible> {
     let uri = request.uri().path_and_query().unwrap().to_string();
     let method = request.method().clone();
@@ -143,6 +147,7 @@ async fn check_ws(
                     }),
                     websocket,
                     config,
+                    no_ssl_check
                 )
                 .await
                 {
@@ -160,7 +165,7 @@ async fn check_ws(
     } else {
         let header = request.headers().to_owned();
         let body = request.into_body();
-        endpoint(config, &uri, method, header, body).await
+        endpoint(config, &uri, method, header, body, no_ssl_check).await
     }
 }
 
@@ -170,6 +175,7 @@ async fn endpoint_ws(
     metadata: Option<Metadata>,
     websocket: HyperWebsocket,
     config_a: Arc<Mutex<Configuration>>,
+    no_ssl_check: bool,
 ) -> Result<(), Error> {
     let config = config_a.clone();
     let mut config = config.lock().await.to_owned();
@@ -177,7 +183,7 @@ async fn endpoint_ws(
       if config.build_mode == Some(BuildMode::Write) {
         if let Some(remote) = &config.remote {
             tracing::trace!("Start ws build");
-            let route = builder::ws::build_ws(uri, metadata, remote.to_owned(), websocket).await;
+            let route = builder::ws::build_ws(uri, metadata, remote.to_owned(), websocket, no_ssl_check).await;
             if let Ok(route) = route {
                 config.routes.push(route);
             }

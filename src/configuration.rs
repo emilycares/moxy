@@ -309,6 +309,8 @@ pub struct Configuration {
     pub host: Option<String>,
     /// This url is called when build_mode is set to `BuildMode::Write`
     pub remote: Option<String>,
+    /// If this is set to true then no ssl certivcate will be checked while making a request
+    pub no_ssl_check: bool,
     /// `BuildMode`
     pub build_mode: Option<BuildMode>,
     /// A list of all available routes.
@@ -361,6 +363,7 @@ impl Default for Configuration {
         Self {
             host: Some(String::from("127.0.0.1:8080")),
             remote: Some(String::from("http://localhost")),
+            no_ssl_check: false,
             build_mode: Some(BuildMode::Read),
             routes: vec![],
         }
@@ -507,6 +510,7 @@ mod tests {
             ],
             host: None,
             remote: None,
+            no_ssl_check: false,
             build_mode: None,
         };
 
@@ -541,6 +545,7 @@ mod tests {
             ],
             host: None,
             remote: None,
+            no_ssl_check: false,
             build_mode: None,
         };
 

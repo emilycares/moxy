@@ -9,8 +9,9 @@ pub async fn fetch_http(
     url: impl reqwest::IntoUrl,
     body: impl Into<reqwest::Body>,
     header: HeaderMap,
+    no_ssl_check: bool,
 ) -> Option<ResourceData> {
-    let response = get_request(method.clone(), url, body, header).send().await;
+    let response = get_request(method.clone(), url, body, header, no_ssl_check).send().await;
 
     if let Ok(response) = response {
         return Some(ResourceData {
@@ -30,9 +31,10 @@ pub fn get_request(
     url: impl reqwest::IntoUrl,
     body: impl Into<reqwest::Body>,
     header: HeaderMap,
+    no_ssl_check: bool,
 ) -> reqwest::RequestBuilder {
     let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_certs(no_ssl_check)
         .build()
         .unwrap_or_default();
     let mut req = client.request(method.to_owned().into(), url);
