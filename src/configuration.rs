@@ -1,10 +1,10 @@
 //! This contains the configuration datastructures and the logic how to read and write it.
 
-use hyper::{Method, Uri};
+use hyper::{Method, HeaderMap};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::{
-    collections::HashMap, convert::TryInto, fmt::Display, io::ErrorKind, str::FromStr,
+    convert::TryInto, fmt::Display, io::ErrorKind, str::FromStr,
     time::Duration,
 };
 use tokio::{
@@ -38,14 +38,15 @@ pub struct Metadata {
     /// HTTP status code
     pub code: u16,
     /// HTTP headers
-    pub headers: HashMap<String, String>,
+    #[serde(with = "http_serde::header_map")]
+    pub header: HeaderMap,
 }
 
 impl Default for Metadata {
     fn default() -> Self {
         Self {
             code: 200,
-            headers: HashMap::new(),
+            header: HeaderMap::new()
         }
     }
 }
@@ -59,6 +60,8 @@ pub struct WsMessage {
     /// This will be contveted to WsMessageTime
     #[serde(default)]
     pub time: Option<String>,
+    /// The message type that has to be sent
+    pub message_type: WsMessagType,
     /// File storage location
     pub location: String,
 }
@@ -76,9 +79,32 @@ impl WsMessage {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+/// The type of the websocket message.
+pub enum WsMessagType {
+    /// A text WebSocket message
+    Text,
+    /// A binary WebSocket message
+    Binary,
+    /// A ping message with the specified payload
+    ///
+    /// The payload here must have a length less than 125 bytes
+    Ping,
+    /// A pong message with the specified payload
+    ///
+    /// The payload here must have a length less than 125 bytes
+    Pong,
+    /// A close message with the optional close frame.
+    Close,
+    /// Raw frame. Note, that you're not going to get this value while reading the message.
+    Frame,
+}
+
 /// Time units
 #[derive(Debug, PartialEq, Eq)]
 pub enum WsMessageTime {
+    /// 5ms
+    Millisecond(usize),
     /// 5s
     Second(usize),
     /// 5m
@@ -95,7 +121,12 @@ impl FromStr for WsMessageTime {
     type Err = u8;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.ends_with('s') {
+        if s.ends_with("ms") {
+            let padding = 2;
+            if let Ok(number) = parse_time_number(s, padding) {
+                return Ok(Self::Millisecond(number));
+            }
+        } else if s.ends_with('s') {
             let padding = 1;
             if let Ok(number) = parse_time_number(s, padding) {
                 return Ok(Self::Second(number));
@@ -129,26 +160,28 @@ impl FromStr for WsMessageTime {
 impl Display for WsMessageTime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Second(t) => write!(f, "{t}s"),
-            Self::Minute(t) => write!(f, "{t}m"),
-            Self::Hour(t) => write!(f, "{t}h"),
-            Self::Sent(t) => write!(f, "{t}sent"),
-            Self::Received(t) => write!(f, "{t}received"),
+            WsMessageTime::Millisecond(t) => write!(f, "{t}ms"),
+            WsMessageTime::Second(t) => write!(f, "{t}s"),
+            WsMessageTime::Minute(t) => write!(f, "{t}m"),
+            WsMessageTime::Hour(t) => write!(f, "{t}h"),
+            WsMessageTime::Sent(t) => write!(f, "{t}sent"),
+            WsMessageTime::Received(t) => write!(f, "{t}received"),
         }
     }
 }
 
 impl From<WsMessageTime> for Duration {
     fn from(wt: WsMessageTime) -> Self {
-        let seconds = match wt {
-            WsMessageTime::Second(s) => s,
-            WsMessageTime::Minute(m) => 60 * m,
-            WsMessageTime::Hour(h) => 60 * 60 * h,
+        let millisecond = match wt {
+            WsMessageTime::Millisecond(m) => m,
+            WsMessageTime::Second(s) => 1000 * s,
+            WsMessageTime::Minute(m) => 1000 * 60 * m,
+            WsMessageTime::Hour(h) => 1000 * 60 * 60 * h,
             WsMessageTime::Sent(_) => 1,
             WsMessageTime::Received(_) => 1,
         };
 
-        Duration::from_secs(seconds.try_into().unwrap())
+        Duration::from_millis(millisecond.try_into().unwrap())
     }
 }
 
@@ -276,6 +309,8 @@ pub struct Configuration {
     pub host: Option<String>,
     /// This url is called when build_mode is set to `BuildMode::Write`
     pub remote: Option<String>,
+    /// If this is set to true then no ssl certivcate will be checked while making a request
+    pub no_ssl_check: bool,
     /// `BuildMode`
     pub build_mode: Option<BuildMode>,
     /// A list of all available routes.
@@ -328,6 +363,7 @@ impl Default for Configuration {
         Self {
             host: Some(String::from("127.0.0.1:8080")),
             remote: Some(String::from("http://localhost")),
+            no_ssl_check: false,
             build_mode: Some(BuildMode::Read),
             routes: vec![],
         }
@@ -363,31 +399,30 @@ pub async fn get_configuration() -> Configuration {
 /// ```
 pub fn get_route<'a>(
     routes: &'a [Route],
-    uri: &'a Uri,
+    uri: &'a str,
     method: &RouteMethod,
 ) -> (Option<&'a Route>, Option<&'a str>) {
     for i in routes.iter() {
         if i.method.eq(method) {
             let index = &i.path.find("$$$");
-            let path = &uri.path();
 
             if let Some(index) = index {
                 let match_before = &i.path[0..*index];
 
-                if path.starts_with(match_before) {
+                if uri.starts_with(match_before) {
                     if index + 3 != i.path.len() {
                         let match_end = &i.path[index + 3..i.path.len()];
 
-                        if path.ends_with(match_end) {
+                        if uri.ends_with(match_end) {
                             let sd = match_end.len();
-                            return (Some(i), Some(&path[i.path.len() - 3 - sd..path.len() - sd]));
+                            return (Some(i), Some(&uri[i.path.len() - 3 - sd..uri.len() - sd]));
                         }
                     } else {
-                        return (Some(i), Some(&path[i.path.len() - 3..path.len()]));
+                        return (Some(i), Some(&uri[i.path.len() - 3..uri.len()]));
                     }
                 }
             }
-            if path.ends_with(&i.path) {
+            if uri.ends_with(&i.path) {
                 return (Some(i), None);
             }
         }
@@ -427,8 +462,6 @@ pub async fn save_configuration(configuration: Configuration) -> Result<(), std:
 
 #[cfg(test)]
 mod tests {
-    use hyper::Uri;
-
     use crate::configuration::{get_route, Route, RouteMethod, WsMessageTime};
 
     use super::Configuration;
@@ -442,8 +475,8 @@ mod tests {
             resource: Some("db/api/test.json".to_string()),
             messages: vec![],
         }];
-        let url = &"http://localhost:8080/api/test".parse::<Uri>().unwrap();
-        let (result, parameter) = get_route(&routes, &url, &RouteMethod::GET);
+        let url = "http://localhost:8080/api/test";
+        let (result, parameter) = get_route(&routes, url, &RouteMethod::GET);
 
         assert_eq!(result.unwrap().resource, routes[0].resource);
         assert_eq!(parameter, None);
@@ -477,6 +510,7 @@ mod tests {
             ],
             host: None,
             remote: None,
+            no_ssl_check: false,
             build_mode: None,
         };
 
@@ -511,6 +545,7 @@ mod tests {
             ],
             host: None,
             remote: None,
+            no_ssl_check: false,
             build_mode: None,
         };
 
@@ -546,48 +581,30 @@ mod tests {
         ];
 
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/1/abc.json"
-                    .parse::<Uri>()
-                    .unwrap(),
-                &RouteMethod::GET
-            )
-            .0
-            .unwrap()
-            .resource
-            .as_ref()
-            .unwrap(),
+            get_route(&routes, "/api/test/1/abc.json", &RouteMethod::GET)
+                .0
+                .unwrap()
+                .resource
+                .as_ref()
+                .unwrap(),
             "db/api/1/$$$.json"
         );
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/2/abc.json"
-                    .parse::<Uri>()
-                    .unwrap(),
-                &RouteMethod::GET
-            )
-            .0
-            .unwrap()
-            .resource
-            .as_ref()
-            .unwrap(),
+            get_route(&routes, "/api/test/2/abc.json", &RouteMethod::GET)
+                .0
+                .unwrap()
+                .resource
+                .as_ref()
+                .unwrap(),
             "db/api/2/$$$.json"
         );
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/3/abc.json"
-                    .parse::<Uri>()
-                    .unwrap(),
-                &RouteMethod::GET
-            )
-            .0
-            .unwrap()
-            .resource
-            .as_ref()
-            .unwrap(),
+            get_route(&routes, "/api/test/3/abc.json", &RouteMethod::GET)
+                .0
+                .unwrap()
+                .resource
+                .as_ref()
+                .unwrap(),
             "db/api/3/$$$.json"
         );
     }
@@ -612,33 +629,21 @@ mod tests {
         ];
 
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/abc.txt"
-                    .parse::<Uri>()
-                    .unwrap(),
-                &RouteMethod::GET
-            )
-            .0
-            .unwrap()
-            .resource
-            .as_ref()
-            .unwrap(),
+            get_route(&routes, "/api/test/abc.txt", &RouteMethod::GET)
+                .0
+                .unwrap()
+                .resource
+                .as_ref()
+                .unwrap(),
             "db/api/$$$.txt"
         );
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/abc.json"
-                    .parse::<Uri>()
-                    .unwrap(),
-                &RouteMethod::GET
-            )
-            .0
-            .unwrap()
-            .resource
-            .as_ref()
-            .unwrap(),
+            get_route(&routes, "/api/test/abc.json", &RouteMethod::GET)
+                .0
+                .unwrap()
+                .resource
+                .as_ref()
+                .unwrap(),
             "db/api/$$$.json"
         );
     }
@@ -654,13 +659,9 @@ mod tests {
         }];
 
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/abc".parse::<Uri>().unwrap(),
-                &RouteMethod::GET
-            )
-            .1
-            .unwrap(),
+            get_route(&routes, "/api/test/abc", &RouteMethod::GET)
+                .1
+                .unwrap(),
             "abc"
         );
     }
@@ -676,15 +677,9 @@ mod tests {
         }];
 
         assert_eq!(
-            get_route(
-                &routes,
-                &"http://localhost:8080/api/test/abc.txt"
-                    .parse::<Uri>()
-                    .unwrap(),
-                &RouteMethod::GET
-            )
-            .1
-            .unwrap(),
+            get_route(&routes, "/api/test/abc.txt", &RouteMethod::GET)
+                .1
+                .unwrap(),
             "abc"
         );
     }
@@ -723,7 +718,7 @@ mod tests {
             messages: vec![],
         }];
 
-        let uri = Uri::from_static("/a/test");
+        let uri = "/a/test";
 
         let result = get_route(&routes, &uri, &RouteMethod::GET);
 

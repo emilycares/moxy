@@ -22,10 +22,11 @@ pub async fn save(
     let content_type: Option<String> = metadata
         .clone()
         .unwrap_or_default()
-        .headers
+        .header
         .get("content-type")
-        .cloned();
-    let path = get_save_path(uri, content_type);
+        .cloned()
+        .map(|v| v.to_str().unwrap_or_default().to_string());
+    let path = get_save_path(uri, content_type.as_deref());
     let mut config = config.lock().await;
     if config.get_route(&path, method).is_none() {
         let route = Route {
@@ -141,6 +142,7 @@ pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) 
         .enumerate()
         .map(|(i, message)| {
             let mut path = path.to_owned() + "_ws/" + &i.to_string();
+            let message_type = message.message_type.clone();
 
             if is_json(&message.content) {
                 path += ".json";
@@ -154,6 +156,7 @@ pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) 
                         kind: WsMessageType::Startup,
                         time: None,
                         location: path,
+                        message_type
                     },
                     message.content.clone(),
                 )
@@ -164,6 +167,7 @@ pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) 
                         kind: WsMessageType::After,
                         time: Some(time),
                         location: path,
+                        message_type
                     },
                     message.content.clone(),
                 )
@@ -216,14 +220,25 @@ async fn save_file(location: &str, body: Vec<u8>, folder: &str) -> Result<(), st
     Ok(())
 }
 
+const FALLBACK_CHAR: &str = "_";
+
 /// Will generate a file location based on a uri.
-pub fn get_save_path(uri: &str, content_type: Option<String>) -> String {
+pub fn get_save_path(uri: &str, content_type: Option<&str>) -> String {
+    let uri = uri
+        .replace('*', FALLBACK_CHAR)
+        .replace('?', FALLBACK_CHAR)
+        .replace('"', FALLBACK_CHAR)
+        .replace('<', FALLBACK_CHAR)
+        .replace('>', FALLBACK_CHAR)
+        .replace(':', FALLBACK_CHAR)
+        .replace('|', FALLBACK_CHAR);
+
     let file_suffix = if uri.ends_with(".txt") || uri.ends_with(".json") {
         Some(String::new())
     } else {
         get_extension(content_type)
     };
-    let mut path = "./db".to_owned() + uri;
+    let mut path = "./db".to_owned() + &uri.to_string();
 
     if path.ends_with('/') {
         path += "index";
@@ -242,7 +257,7 @@ pub fn get_save_path(uri: &str, content_type: Option<String>) -> String {
 }
 
 /// convert content_type to filetype
-fn get_extension(content_type: Option<String>) -> Option<String> {
+fn get_extension(content_type: Option<&str>) -> Option<String> {
     if let Some(content_type) = content_type {
         let content_type = if content_type.contains(';') {
             if let Some(content_type) = content_type.split(';').next() {

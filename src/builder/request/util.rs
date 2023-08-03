@@ -2,11 +2,11 @@ use std::{collections::HashMap, str::FromStr};
 
 use hyper::{
     header::{HeaderName, HeaderValue},
-    HeaderMap, Uri,
+    HeaderMap,
 };
 
 /// Get url with the new host
-pub fn get_url(uri: &Uri, host: impl Into<String>) -> String {
+pub fn get_url(uri: &str, host: impl Into<String>) -> String {
     host.into() + &uri.to_string()
 }
 
@@ -25,7 +25,7 @@ pub fn hash_map_to_header_map(map: HashMap<String, String>) -> HeaderMap {
 }
 
 /// Convert HashMap to mut HeaderMap
-pub fn hash_map_to_mut_header_map(map: HashMap<String, String>, out: &mut HeaderMap)  {
+pub fn hash_map_to_mut_header_map(map: HashMap<String, String>, out: &mut HeaderMap) {
     let keys = map.keys();
 
     for key in keys {

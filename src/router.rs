@@ -2,10 +2,10 @@
 use futures_util::StreamExt;
 use futures_util::{sink::SinkExt, stream::FuturesUnordered};
 use hyper::upgrade::Upgraded;
+use hyper::HeaderMap;
 use hyper_tungstenite::WebSocketStream;
 use rayon::prelude::*;
-use std::collections::HashMap;
-use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
+use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 
 use hyper::{
     service::{make_service_fn, service_fn},
@@ -14,8 +14,7 @@ use hyper::{
 use hyper_tungstenite::{tungstenite::Message, HyperWebsocket};
 use tokio::sync::Mutex;
 
-use crate::builder::request::util::{header_map_to_hash_map, hash_map_to_mut_header_map};
-use crate::configuration::Metadata;
+use crate::configuration::{Metadata, WsMessage};
 use crate::{
     builder::{self, storage},
     configuration::{self, BuildMode, Configuration, RouteMethod, WsMessageType},
@@ -31,6 +30,8 @@ pub async fn start() {
     }
     let addr: Result<SocketAddr, _> = config.host.as_ref().unwrap().parse();
 
+    let no_ssl_check = config.no_ssl_check;
+
     let config = Arc::new(Mutex::new(config));
 
     if let Ok(addr) = addr {
@@ -40,7 +41,7 @@ pub async fn start() {
             async move {
                 Ok::<_, hyper::Error>(service_fn(move |req| {
                     let config = config.clone();
-                    async move { check_ws(req, config).await }
+                    async move { check_ws(req, config, no_ssl_check).await }
                 }))
             }
         });
@@ -60,18 +61,21 @@ pub async fn start() {
 /// Call data_loader or builder depending on if the route exists or not.
 async fn endpoint(
     config_a: Arc<Mutex<Configuration>>,
-    uri: &hyper::Uri,
-    method: &hyper::Method,
+    uri: &str,
+    method: hyper::Method,
+    header: HeaderMap,
+    body: hyper::Body,
+    no_ssl_check: bool,
 ) -> Result<Response<Body>, Infallible> {
     tracing::info!("{}", uri);
     let configc = config_a.clone();
     let mut config = configc.lock().await.to_owned();
     let (route, parameter) =
-        configuration::get_route(&config.routes, uri, &RouteMethod::from(method));
+        configuration::get_route(&config.routes, uri, &RouteMethod::from(method.clone()));
 
     let Some(route) = route else {
          if config.build_mode == Some(BuildMode::Write) {
-             return builder::core::build_response(config_a, uri, method).await
+             return builder::core::build_response(config_a, uri, method, header, body, no_ssl_check).await
          } else {
              tracing::info!("Resource not found and build mode disabled");
              let response = Response::builder().status(404).body(Body::empty()).unwrap();
@@ -86,7 +90,7 @@ async fn endpoint(
         }
 
         if config.build_mode == Some(BuildMode::Write) {
-            return builder::core::build_response(config_a, uri, method).await;
+            return builder::core::build_response(config_a, uri, method, header, body, no_ssl_check).await;
         } else {
             tracing::error!("Will build new route for missing file");
             let response = Response::builder().status(404).body(Body::empty()).unwrap();
@@ -94,28 +98,26 @@ async fn endpoint(
         }
     };
     let metadata = route.metadata.to_owned().unwrap_or_default();
-    let mut resp_build = Response::builder()
-        .status(metadata.code)
-        .header(
-            "content-type",
-            get_content_type_with_fallback(metadata.headers.clone(), route.resource.clone()),
-        );
+    let mut resp_build = Response::builder().status(metadata.code).header(
+        "content-type",
+        get_content_type_with_fallback(metadata.header.clone(), route.resource.clone()),
+    );
 
-    let mut headers = resp_build.headers_mut().expect("This has just been created");
-    hash_map_to_mut_header_map(metadata.headers, &mut headers);
-        
-    let response = resp_build.body(Body::from(data))
-        .unwrap();
+    for (key, value) in metadata.header.into_iter() {
+        if let Some(key) = key {
+            resp_build = resp_build.header(key, value);
+        }
+    }
+
+    let response = resp_build.body(Body::from(data)).unwrap();
 
     Ok(response)
 }
 
-fn get_content_type_with_fallback(
-    headers: HashMap<String, String>,
-    resource: Option<String>,
-) -> String {
+fn get_content_type_with_fallback(headers: HeaderMap, resource: Option<String>) -> String {
     return headers
         .get("content-type")
+        .map(|v| v.to_str().unwrap_or_default())
         .map(|c| c.to_owned())
         .unwrap_or_else(|| {
             tracing::info!("Guessing content-type based on the file resource. Becaue it was not specified in the headers");
@@ -127,23 +129,25 @@ fn get_content_type_with_fallback(
 async fn check_ws(
     request: Request<Body>,
     config: Arc<Mutex<Configuration>>,
+    no_ssl_check: bool,
 ) -> Result<Response<Body>, Infallible> {
-    let uri = request.uri().clone();
-    let method = &request.method();
+    let uri = request.uri().path_and_query().unwrap().to_string();
+    let method = request.method().clone();
+    let headers = request.headers().clone();
     if hyper_tungstenite::is_upgrade_request(&request) {
         if let Ok((response, websocket)) = hyper_tungstenite::upgrade(request, None) {
             let restponse_status = response.status().as_u16().clone();
-            let response_headers = header_map_to_hash_map(response.headers()).clone();
             // Spawn a task to handle the websocket connection.
             tokio::spawn(async move {
                 if let Err(e) = endpoint_ws(
                     &uri,
                     Some(Metadata {
                         code: restponse_status,
-                        headers: response_headers,
+                        header: headers,
                     }),
                     websocket,
                     config,
+                    no_ssl_check
                 )
                 .await
                 {
@@ -159,16 +163,19 @@ async fn check_ws(
             Ok(response)
         }
     } else {
-        endpoint(config, &uri, method).await
+        let header = request.headers().to_owned();
+        let body = request.into_body();
+        endpoint(config, &uri, method, header, body, no_ssl_check).await
     }
 }
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 async fn endpoint_ws(
-    uri: &hyper::Uri,
+    uri: &str,
     metadata: Option<Metadata>,
     websocket: HyperWebsocket,
     config_a: Arc<Mutex<Configuration>>,
+    no_ssl_check: bool,
 ) -> Result<(), Error> {
     let config = config_a.clone();
     let mut config = config.lock().await.to_owned();
@@ -176,7 +183,7 @@ async fn endpoint_ws(
       if config.build_mode == Some(BuildMode::Write) {
         if let Some(remote) = &config.remote {
             tracing::trace!("Start ws build");
-            let route = builder::ws::build_ws(uri, metadata, remote.to_owned(), websocket).await;
+            let route = builder::ws::build_ws(uri, metadata, remote.to_owned(), websocket, no_ssl_check).await;
             if let Ok(route) = route {
                 config.routes.push(route);
             }
@@ -198,45 +205,48 @@ async fn endpoint_ws(
     let websocket = websocket.await?;
 
     let (tx, rx) = tokio::sync::mpsc::channel(32);
+    tracing::trace!("Start data loading");
 
-    let startup_messages: Vec<Vec<u8>> = route
+    let messages: Vec<(WsMessage, Vec<u8>)> = route
         .messages
         .par_iter()
-        .filter(|c| c.kind == WsMessageType::Startup)
-        .map(|c| data_loader::file_sync(c.location.as_str()))
-        .filter(|c| c.is_ok())
-        .map(|c| c.unwrap())
+        .map(|message| (message, data_loader::file_sync(message.location.as_str())))
+        .filter(|(_, content)| content.is_ok())
+        .map(|(message, content)| (message.clone(), content.unwrap()))
         .collect();
 
-    for c in startup_messages {
-        match std::str::from_utf8(&c) {
-            Ok(m) => tx.send(Message::text(m)).await?,
-            Err(_) => tx.send(Message::binary(c)).await?,
-        };
-    }
-    let after_messages: Vec<(Duration, Vec<u8>)> = route
-        .messages
-        .par_iter()
-        .filter(|c| c.kind == WsMessageType::After)
-        .map(|c| (c.get_time(), data_loader::file_sync(c.location.as_str())))
-        .filter(|c| c.0.is_some() && c.1.is_ok())
-        .map(|c| (c.0.unwrap(), c.1.unwrap()))
-        .collect();
+    tracing::trace!("Data loading done");
 
     let mut tasks = FuturesUnordered::new();
 
-    for m in after_messages {
-        let tx = tx.clone();
-        tasks.push(tokio::task::spawn(async move {
-            tokio::time::sleep(m.0).await;
-
-            let msg = m.1;
-
-            match std::str::from_utf8(&msg) {
-                Ok(m) => tx.send(Message::text(m)).await.unwrap(),
-                Err(_) => tx.send(Message::binary(msg.clone())).await.unwrap(),
+    for (message, content) in messages {
+        match message.kind {
+            WsMessageType::Startup => {
+                send_handle_type(&message, &content, &tx).await;
             }
-        }));
+            WsMessageType::After => {
+                let tx = tx.clone();
+                if let Some(time) = message.get_time() {
+                    tasks.push(tokio::task::spawn(async move {
+                        tokio::time::sleep(time).await;
+
+                        send_handle_type(&message, &content, &tx).await;
+                    }));
+                }
+            }
+            WsMessageType::Every => {
+                let tx = tx.clone();
+                if let Some(ltime) = message.get_time() {
+                    tasks.push(tokio::task::spawn(async move {
+                        let mut interval = tokio::time::interval(ltime);
+                        loop {
+                            interval.tick().await;
+                            send_handle_type(&message, &content, &tx).await;
+                        }
+                    }));
+                }
+            }
+        }
     }
 
     tasks.push(tokio::task::spawn(async move {
@@ -249,14 +259,51 @@ async fn endpoint_ws(
     Ok(())
 }
 
+async fn send_handle_type(
+    message: &WsMessage,
+    content: &Vec<u8>,
+    tx: &tokio::sync::mpsc::Sender<Message>,
+) {
+    match message.message_type {
+        configuration::WsMessagType::Text => {
+            match std::str::from_utf8(&content) {
+                Ok(m) => match tx.send(Message::text(m.replace("^@", "\u{0}"))).await {
+                    Ok(_) => (),
+                    Err(_) => tracing::error!("Unable to send Text message"),
+                },
+                Err(_) => {
+                    tracing::error!("Unable to send non utf-8 text message: {:?}", content);
+                }
+            };
+        }
+        configuration::WsMessagType::Binary => match tx.send(Message::Binary(content.to_owned())).await {
+            Ok(_) => (),
+            Err(_) => tracing::error!("Unable to send Binary message"),
+        },
+        configuration::WsMessagType::Ping => match tx.send(Message::Ping(content.to_owned())).await {
+            Ok(_) => (),
+            Err(_) => tracing::error!("Unable to send Ping message"),
+        },
+        configuration::WsMessagType::Pong => match tx.send(Message::Pong(content.to_owned())).await {
+            Ok(_) => (),
+            Err(_) => tracing::error!("Unable to send Pong message"),
+        },
+        configuration::WsMessagType::Close => unimplemented!(),
+        configuration::WsMessagType::Frame => unimplemented!(),
+    };
+}
+
 async fn send_ws_messages(
     mut rx: tokio::sync::mpsc::Receiver<Message>,
     mut websocket: WebSocketStream<Upgraded>,
 ) {
-    while let Some(message) = rx.recv().await {
-        match websocket.send(message).await {
-            Ok(_) => tracing::trace!("Sent message"),
-            Err(_) => tracing::error!("Failed to send message"),
+    loop {
+        match rx.try_recv() {
+            Ok(message) => match websocket.send(message).await {
+                Ok(_) => tracing::trace!("Sent message"),
+                Err(_) => tracing::error!("Failed to send message"),
+            },
+            Err(_) => (),
         }
     }
 }
