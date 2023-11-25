@@ -121,8 +121,8 @@ fn get_content_type_with_fallback(headers: HeaderMap, resource: Option<String>) 
         .map(|c| c.to_owned())
         .unwrap_or_else(|| {
             tracing::info!("Guessing content-type based on the file resource. Becaue it was not specified in the headers");
-            return storage::get_content_type(resource
-                                             .expect("save here because there will never be data without a resource",));
+            storage::get_content_type(resource
+                                             .expect("save here because there will never be data without a resource",))
             });
 }
 
@@ -136,7 +136,7 @@ async fn check_ws(
     let headers = request.headers().clone();
     if hyper_tungstenite::is_upgrade_request(&request) {
         if let Ok((response, websocket)) = hyper_tungstenite::upgrade(request, None) {
-            let restponse_status = response.status().as_u16().clone();
+            let restponse_status = response.status().as_u16();
             // Spawn a task to handle the websocket connection.
             tokio::spawn(async move {
                 if let Err(e) = endpoint_ws(
@@ -266,7 +266,7 @@ async fn send_handle_type(
 ) {
     match message.message_type {
         configuration::WsMessagType::Text => {
-            match std::str::from_utf8(&content) {
+            match std::str::from_utf8(content) {
                 Ok(m) => match tx.send(Message::text(m.replace("^@", "\u{0}"))).await {
                     Ok(_) => (),
                     Err(_) => tracing::error!("Unable to send Text message"),

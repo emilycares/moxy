@@ -40,7 +40,7 @@ impl WsClientMessage {
         match message {
             Message::Text(m) => Self {
                 offset,
-                content: m.as_str().as_bytes().to_vec(),
+                content: m.as_bytes().to_vec(),
                 message_type: WsMessagType::Text,
             },
             Message::Binary(m) => Self {
@@ -123,7 +123,7 @@ pub async fn build_ws(
     // connect to remote
     tasks.push(tokio::task::spawn(async move {
         tracing::trace!("connect to remote");
-        let url = get_ws_url(&request::util::get_url_str(&uri, &remote.into()));
+        let url = get_ws_url(&request::util::get_url_str(&uri, remote.into()));
         tracing::trace!("{:?}", url);
         let request = get_request(url, metadata);
 
@@ -190,7 +190,7 @@ pub async fn build_ws(
     //}
 
     let messages = remote_messages.lock().await.to_owned();
-    route.messages = storage::save_ws_client_message(&path, messages).await;
+    route.messages = storage::save_ws_client_message(path, messages).await;
 
     Ok(route)
 }
@@ -219,7 +219,7 @@ pub async fn read_ws_remote(
     loop {
         match read.next().await {
             Some(Ok(message)) => {
-                if let Ok(_) = tx.send(message) {
+                if tx.send(message).is_ok() {
                     tracing::trace!("Sent message to remote");
                 } else {
                     tracing::error!("Unable to send message to remote");
@@ -241,7 +241,7 @@ pub async fn read_ws_client(
     loop {
         match read.next().await {
             Some(Ok(message)) => {
-                if let Ok(_) = tx.send(message).await {
+                if tx.send(message).await.is_ok() {
                     tracing::trace!("got user input");
                 } else {
                     tracing::error!("Unable to process user input");
@@ -306,7 +306,7 @@ fn get_request(url: String, metadata: Option<Metadata>) -> Request<()> {
         if let Some(request_header) = request.headers_mut() {
             for (key, value) in metadata.header {
                 if let Some(key) = key {
-                    request_header.insert::<HeaderName>(key.into(), value);
+                    request_header.insert::<HeaderName>(key, value);
                 }
             }
         }

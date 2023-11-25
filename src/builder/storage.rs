@@ -156,7 +156,7 @@ pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) 
                         kind: WsMessageType::Startup,
                         time: None,
                         location: path,
-                        message_type
+                        message_type,
                     },
                     message.content.clone(),
                 )
@@ -167,7 +167,7 @@ pub async fn save_ws_client_message(path: &str, messages: Vec<WsClientMessage>) 
                         kind: WsMessageType::After,
                         time: Some(time),
                         location: path,
-                        message_type
+                        message_type,
                     },
                     message.content.clone(),
                 )
@@ -224,14 +224,7 @@ const FALLBACK_CHAR: &str = "_";
 
 /// Will generate a file location based on a uri.
 pub fn get_save_path(uri: &str, content_type: Option<&str>) -> String {
-    let uri = uri
-        .replace('*', FALLBACK_CHAR)
-        .replace('?', FALLBACK_CHAR)
-        .replace('"', FALLBACK_CHAR)
-        .replace('<', FALLBACK_CHAR)
-        .replace('>', FALLBACK_CHAR)
-        .replace(':', FALLBACK_CHAR)
-        .replace('|', FALLBACK_CHAR);
+    let uri = uri.replace(['*', '?', '"', '<', '>', ':', '|'], FALLBACK_CHAR);
 
     let file_suffix = if uri.ends_with(".txt") || uri.ends_with(".json") {
         Some(String::new())
@@ -263,10 +256,10 @@ fn get_extension(content_type: Option<&str>) -> Option<String> {
             if let Some(content_type) = content_type.split(';').next() {
                 content_type
             } else {
-                &content_type
+                content_type
             }
         } else {
-            &content_type
+            content_type
         };
 
         let mime = content_type.parse::<mime::Mime>();
